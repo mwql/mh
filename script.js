@@ -183,7 +183,7 @@ async function displayPredictions(predictions) {
     // Filter out config items (Robust check)
     const actualForecasts = predictions.filter(p => {
         const cond = (p.condition || '').trim();
-        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__';
+        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__';
     });
 
     // -----------------------------
@@ -251,11 +251,24 @@ async function displayPredictions(predictions) {
         return dateStr;
     }
     
-    // Update main header on index.html to ALWAYS show today's date
+    // Update main header on index.html
+    // Logic: Look for __TARGET_DATE__ config. If exists and valid, use it. Else use LIVE TODAY.
     if (targetDateDisplay) {
-        const today = new Date();
+        let displayDate = new Date(); // Default: Live
+        
+        // Find config
+        const dateConfig = predictions.find(p => p.condition === '__TARGET_DATE__');
+        if (dateConfig && dateConfig.notes) {
+            // Parse configured date (YYYY-MM-DD to Date object)
+            // We append T00:00:00 to avoid timezone shifts (naive date)
+            const d = new Date(dateConfig.notes + 'T00:00:00');
+            if (!isNaN(d.getTime())) {
+                displayDate = d;
+            }
+        }
+        
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
-        targetDateDisplay.textContent = today.toLocaleDateString('en-US', options);
+        targetDateDisplay.textContent = displayDate.toLocaleDateString('en-US', options);
     }
     
     // -----------------------------
@@ -344,6 +357,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (iThinkConfig) {
             const iThinkElement = document.getElementById('i-think-text');
             if (iThinkElement) iThinkElement.textContent = iThinkConfig.notes;
+        }
+
+        // Update Header Image
+        const headerImgConfig = predictions.find(p => p.condition === '__HEADER_IMAGE__');
+        const headerImg = document.querySelector('.header-panel img');
+        if (headerImg) {
+            if (headerImgConfig && headerImgConfig.notes) {
+                headerImg.src = headerImgConfig.notes;
+                // Add minor styling to ensure it fits well
+                headerImg.style.borderRadius = "12px";
+                headerImg.style.objectFit = "cover";
+            } else {
+                headerImg.src = 'img/Mahdawi_Weather.png';
+            }
         }
 
         displayPredictions(predictions);

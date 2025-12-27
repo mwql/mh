@@ -17,6 +17,7 @@ const USER_UPLOAD_LIMIT = 2;
 let pendingApiValid = false;
 let pendingApiUrl = ''; 
 let pendingApiName = '';
+let pendingHeaderImageBase64 = null; // New: For header image upload
 let currentPredictions = []; // Global predictions array
 
 // GLOBAL SUPABASE CONFIG
@@ -32,6 +33,10 @@ window.addPrediction = addPrediction;
 window.deletePrediction = deletePrediction;
 window.deletePrediction = deletePrediction;
 window.saveIThinkMessage = saveIThinkMessage;
+window.saveTargetDate = saveTargetDate;
+window.handleHeaderImageSelect = handleHeaderImageSelect;
+window.saveHeaderImage = saveHeaderImage;
+window.removeHeaderImage = removeHeaderImage;
 window.testApiConnection = testApiConnection;
 window.addExternalApi = addExternalApi;
 window.removeApi = removeApi;
@@ -413,6 +418,8 @@ function updateUIForRole() {
   const settings = document.getElementById("section-settings");
     const addSection = document.getElementById('section-add');
     const iThink = document.getElementById('section-ithink');
+    const targetDateSection = document.getElementById('section-target-date');
+    const headerImageSection = document.getElementById('section-header-image');
     const apiSection = document.getElementById('section-apis');
     const listSection = document.getElementById('section-list');
     
@@ -421,6 +428,8 @@ function updateUIForRole() {
     if (settings) settings.style.display = 'block';
     if (addSection) addSection.style.display = 'block';
     if (iThink) iThink.style.display = 'block';
+    if (targetDateSection) targetDateSection.style.display = 'block';
+    if (headerImageSection) headerImageSection.style.display = 'block';
     if (apiSection) apiSection.style.display = 'block';
     if (listSection) listSection.style.display = 'block';
     
@@ -429,6 +438,8 @@ function updateUIForRole() {
         if (analytics) analytics.style.display = 'none';
         if (settings) settings.style.display = 'none';
         if (iThink) iThink.style.display = 'none';
+        if (targetDateSection) targetDateSection.style.display = 'none';
+        if (headerImageSection) headerImageSection.style.display = 'none';
         if (apiSection) apiSection.style.display = 'none';
         // Keep 'Add' and 'List' visible
     }
@@ -444,11 +455,149 @@ async function loadIThinkMessage() {
     }
 }
 
+// Load Target Date
+async function loadTargetDate() {
+    const configItem = currentPredictions.find(p => p.condition === '__TARGET_DATE__');
+    const input = document.getElementById('admin-target-date');
+    if (input) {
+         if (configItem && configItem.notes) {
+            input.value = configItem.notes;
+        } else {
+            input.value = '';
+        }
+    }
+}
+
+// Save Target Date
+async function saveTargetDate() {
+    const input = document.getElementById('admin-target-date');
+    const dateVal = input.value;
+    
+    // Find or create config item
+    let configItem = currentPredictions.find(p => p.condition === '__TARGET_DATE__');
+    if (configItem) {
+        configItem.notes = dateVal; // If empty, it means "use live date"
+    } else {
+        currentPredictions.push({
+            date: '2000-01-01',
+            temperature: '0',
+            condition: '__TARGET_DATE__',
+            notes: dateVal
+        });
+    }
+    
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Target Date updated successfully!');
+}
+
+// ========================
+// HEADER IMAGE LOGIC
+// ========================
+async function handleHeaderImageSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // Compress/Resize logic
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = function(e) {
+        const img = new Image();
+        img.src = e.target.result;
+        img.onload = function() {
+            // Resize to max 800px width
+            const maxWidth = 800;
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > maxWidth) {
+                height = (height * maxWidth) / width;
+                width = maxWidth;
+            }
+            
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            // Compress to JPEG 0.7
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            
+            // Show preview
+            const preview = document.getElementById('header-preview');
+            const previewContainer = document.getElementById('header-preview-container');
+            if (preview && previewContainer) {
+                preview.src = dataUrl;
+                previewContainer.style.display = 'block';
+            }
+            
+            pendingHeaderImageBase64 = dataUrl;
+        }
+    }
+}
+
+async function saveHeaderImage() {
+    if (!pendingHeaderImageBase64) {
+        alert('Please select an image first!');
+        return;
+    }
+    
+    // Find or create
+    let configItem = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
+    if(configItem) {
+        configItem.notes = pendingHeaderImageBase64;
+    } else {
+        currentPredictions.push({
+             date: '2000-01-01',
+             temperature: '0', 
+             condition: '__HEADER_IMAGE__',
+             notes: pendingHeaderImageBase64
+        });
+    }
+    
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Header Image saved successfully! It will appear on the site shortly.');
+}
+
+async function removeHeaderImage() {
+    if(!confirm('Return to default logo?')) return;
+    
+    // Remove from array
+    currentPredictions = currentPredictions.filter(p => p.condition !== '__HEADER_IMAGE__');
+    
+    // Reset UI
+    pendingHeaderImageBase64 = null;
+    const previewContainer = document.getElementById('header-preview-container');
+    const fileInput = document.getElementById('header-file-input');
+    if(previewContainer) previewContainer.style.display = 'none';
+    if(fileInput) fileInput.value = '';
+    
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Custom header removed. Reverted to default.');
+}
+
+async function loadHeaderImage() {
+    const configItem = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
+    if (configItem && configItem.notes) {
+        const preview = document.getElementById('header-preview');
+        const previewContainer = document.getElementById('header-preview-container');
+        if (preview && previewContainer) {
+            preview.src = configItem.notes;
+            previewContainer.style.display = 'block';
+        }
+    }
+}
+
 // Load admin data
 async function loadAdminData() {
     loadSupabaseSettings(); // Load settings first
     await loadPredictionsForAdmin();
     await loadIThinkMessage();
+    await loadTargetDate();
+    await loadHeaderImage();
     loadApis();
     updateAnalytics();
     setInterval(updateAnalytics, 2000);
@@ -769,6 +918,8 @@ async function handleResetViews() {
 async function loadPredictionsForAdmin() {
   try {
     currentPredictions = await initializePredictions();
+    // Explicitly purge logs from memory to prevent admin clutter
+    currentPredictions = currentPredictions.filter(p => p.condition !== '__VIEW_LOG__');
     displayPredictionsInAdmin(currentPredictions);
   } catch (error) {
     console.error("Admin: Error loading predictions", error);
@@ -789,7 +940,7 @@ function displayPredictionsInAdmin(predictions) {
 
   predictions.forEach((pred, index) => {
     // Skip config items
-    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__') return;
+    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__' || pred.condition === '__TARGET_DATE__' || pred.condition === '__HEADER_IMAGE__') return;
 
     const card = document.createElement("div");
     card.className = "admin-prediction-card";

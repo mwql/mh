@@ -442,6 +442,45 @@
                 <button class="btn-primary" onclick="saveIThinkMessage()">Update Message</button>
             </div>
 
+            <!-- Target Date Settings -->
+            <div class="section" id="section-target-date">
+                <h2>📅 Target Date Settings</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                    Select the date to show on the main page. Leave empty to show the live date.
+                </p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Target Date</label>
+                        <input type="date" id="admin-target-date">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="saveTargetDate()">Update Date</button>
+            </div>
+
+            <!-- Header Image Settings -->
+            <div class="section" id="section-header-image">
+                <h2>🖼️ Header Image Settings</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                    Upload a custom image to replace the main logo. (Max 1MB, Auto-resized)
+                </p>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Select Image</label>
+                        <input type="file" id="header-file-input" accept="image/*" onchange="handleHeaderImageSelect(event)">
+                    </div>
+                </div>
+                
+                <div id="header-preview-container" style="display: none; margin-bottom: 20px; text-align: center;">
+                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px;">Preview:</p>
+                    <img id="header-preview" src="" style="max-width: 100%; max-height: 200px; border-radius: 12px; border: 1px solid var(--border-color);">
+                </div>
+
+                <div class="form-actions" style="display: flex; gap: 10px;">
+                    <button class="btn-primary" style="flex: 1;" onclick="saveHeaderImage()">Save Image</button>
+                    <button class="btn-secondary" style="flex: 1; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);" onclick="removeHeaderImage()">Remove Custom</button>
+                </div>
+            </div>
+
             <!-- Manage External APIs (Other.html) -->
             <div class="section" id="section-apis">
                 <h2>🌍 External APIs (Other.html)</h2>
