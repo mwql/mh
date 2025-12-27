@@ -50,6 +50,7 @@ async function loadPredictions() {
                 // Map back to the expected local format
                 const normalizedData = data.map(p => {
                     let uploader = null;
+                    let city = null;
                     let notes = p.notes;
                     
                     // Extract uploader from notes tag {{uploader:NAME}}
@@ -61,13 +62,23 @@ async function loadPredictions() {
                         }
                     }
 
+                    // Extract city from notes tag {{city:NAME}}
+                    if (notes && notes.includes('{{city:')) {
+                        const match = notes.match(/{{city:(.*?)}}/);
+                        if (match) {
+                            city = match[1];
+                            notes = notes.replace(match[0], '').trim();
+                        }
+                    }
+
                     return {
                         date: p.date, 
                         toDate: p.to_date, 
                         temperature: p.temperature, 
                         condition: p.condition, 
                         notes: notes, 
-                        uploader: uploader
+                        uploader: uploader,
+                        city: city
                     };
                 });
                 
@@ -97,12 +108,23 @@ async function loadPredictions() {
                     const data = await response.json();
                     const normalizedData = data.map(p => {
                         let uploader = null;
+                        let city = null;
                         let notes = p.notes;
                         
+                        // Extract uploader from notes tag {{uploader:NAME}}
                         if (notes && notes.includes('{{uploader:')) {
                             const match = notes.match(/{{uploader:(.*?)}}/);
                             if (match) {
                                 uploader = match[1];
+                                notes = notes.replace(match[0], '').trim();
+                            }
+                        }
+
+                        // Extract city from notes tag {{city:NAME}}
+                        if (notes && notes.includes('{{city:')) {
+                            const match = notes.match(/{{city:(.*?)}}/);
+                            if (match) {
+                                city = match[1];
                                 notes = notes.replace(match[0], '').trim();
                             }
                         }
@@ -113,7 +135,8 @@ async function loadPredictions() {
                             temperature: p.temperature, 
                             condition: p.condition, 
                             notes: notes, 
-                            uploader: uploader
+                            uploader: uploader,
+                            city: city
                         };
                     });
                     localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
@@ -154,31 +177,58 @@ async function displayPredictions(predictions) {
     listContainer.innerHTML = '';
 
     // Filter out config items
-    const actualForecasts = predictions.filter(p => p.condition !== '__ITHINK__');
+    const actualForecasts = predictions.filter(p => p.condition !== '__ITHINK__' && p.condition !== '__EXTERNAL_APIS__');
 
     // -----------------------------
-    // LIVE KUWAIT WEATHER CARD (Only on other.html)
+    // DYNAMIC EXTERNAL APIs (Only on other.html)
     // -----------------------------
-    // Check if we're on other.html - only show live weather there
     const isOtherPage = window.location.pathname.includes('other.html') || document.title.includes('Kuwait Live Weather');
     
     if (isOtherPage) {
-        const liveWeather = await fetchLiveKuwaitWeather();
-        if (liveWeather) {
-            const liveCard = document.createElement('div');
-            liveCard.className = 'prediction-card';
+        // Find config for external APIs
+        const apiConfig = predictions.find(p => p.condition === '__EXTERNAL_APIS__');
+        let apiList = [];
+        
+        if (apiConfig && apiConfig.notes) {
+            try {
+                apiList = JSON.parse(apiConfig.notes);
+            } catch (e) {}
+        }
 
-            liveCard.innerHTML = `
-                <div class="weather-icon">
-                    <img src="https://openweathermap.org/img/wn/${liveWeather.icon}@2x.png" alt="" style="width: 40px; height: 40px;">
-                </div>
-                <div class="prediction-details">
-                    <h4>Kuwait (Live Now)</h4>
-                    <p class="temp">${liveWeather.temp}°C</p>
-                    <p class="note">${liveWeather.desc}</p>
-                </div>
-            `;
-            listContainer.appendChild(liveCard);
+        // If no APIs configured, show default Kuwait
+        if (apiList.length === 0) {
+            const KUWAIT_API_KEY = "6cf6b597227cd3370b52a776ca5824ac";
+            const KUWAIT_URL = `https://api.openweathermap.org/data/2.5/weather?q=Kuwait&units=metric&appid=${KUWAIT_API_KEY}`;
+            apiList.push({ name: 'Kuwait (Default)', url: KUWAIT_URL });
+        }
+
+        // Fetch and Render all
+        for (const api of apiList) {
+            try {
+                const response = await fetch(api.url);
+                if (response.ok) {
+                    const data = await response.json();
+                    const temp = Math.round(data.main.temp);
+                    const desc = data.weather[0].description;
+                    const icon = data.weather[0].icon;
+
+                    const liveCard = document.createElement('div');
+                    liveCard.className = 'prediction-card';
+                    liveCard.innerHTML = `
+                        <div class="weather-icon">
+                            <img src="https://openweathermap.org/img/wn/${icon}@2x.png" alt="" style="width: 40px; height: 40px;">
+                        </div>
+                        <div class="prediction-details">
+                            <h4>${api.name}</h4>
+                            <p class="temp">${temp}°C</p>
+                            <p class="note">${desc}</p>
+                        </div>
+                    `;
+                    listContainer.appendChild(liveCard);
+                }
+            } catch (e) {
+                console.error(`Error loading API ${api.name}:`, e);
+            }
         }
     }
     
@@ -221,8 +271,8 @@ async function displayPredictions(predictions) {
             else if (pred.condition.includes('Stormy')) icon = '⛈️';
             else if (pred.condition.includes('Snowy')) icon = '❄️';
             else if (pred.condition.includes('Windy')) icon = '💨';
-            else if (pred.condition.includes('drasy')) icon = '📚';
-            else if (pred.condition.includes('3aly')) icon = '🧑‍🧑‍🧒‍🧒';
+            else if (pred.condition.includes('drasy') || pred.condition.includes('study')) icon = '📚';
+            else if (pred.condition.includes('3aly') || pred.condition.includes('famly') || pred.condition.includes('family')) icon = '👨‍👨‍👧‍👦';
             
             // Normalize and parse date
             const normalizedDate = normalizeDate(pred.date);
@@ -255,6 +305,7 @@ async function displayPredictions(predictions) {
                         </span>
                     </h4>
                     <p class="temp">${pred.temperature}°C</p>
+                    ${pred.city ? `<p class="city" style="color: var(--text-color); font-size: 0.9rem; margin-top: -5px; margin-bottom: 5px;">📍 ${pred.city}</p>` : ''}
                     ${pred.uploader ? `<p class="uploader" style="color: var(--accent-color); font-size: 0.85rem; margin-bottom: 4px;">By: ${pred.uploader}</p>` : ''}
                     ${pred.notes ? `<p class="note">${pred.notes}</p>` : ''}
                 </div>

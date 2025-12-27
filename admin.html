@@ -355,14 +355,17 @@
             </div>
 
             <!-- Analytics Card -->
-            <div class="analytics-card">
+            <div class="analytics-card" id="section-analytics" style="position: relative;">
                 <h2>📈 Today's Page Views</h2>
                 <div class="view-count" id="view-count">0</div>
                 <div class="analytics-date" id="analytics-date">Loading...</div>
+                <button onclick="handleResetViews()" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); font-size: 0.8rem; padding: 6px 12px; margin-top: 15px; border-radius: 8px;">
+                    🔄 Reset Counter
+                </button>
             </div>
 
             <!-- Supabase Settings -->
-            <div class="section">
+            <div class="section" id="section-settings">
                 <h2>⚙️ Supabase Sync Settings</h2>
                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
                     Required for real-time cloud sync across all devices.
@@ -389,7 +392,7 @@
             </div>
 
             <!-- Add New Prediction -->
-            <div class="section">
+            <div class="section" id="section-add">
                 <h2>➕ Add New Forecast</h2>
                 <div class="form-grid">
                     <div class="form-group">
@@ -406,7 +409,11 @@
                     </div>
                     <div class="form-group">
                         <label>Condition *</label>
-                        <input type="text" id="pred-condition" placeholder="e.g., Sunny, Cloudy, Rainy" required>
+                        <input type="text" id="pred-condition" placeholder="e.g., Sunny, famly, study" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Target City</label>
+                        <input type="text" id="pred-city" placeholder="e.g., Kuwait City">
                     </div>
                     <div class="form-group">
                         <label>Uploader Name</label>
@@ -421,7 +428,7 @@
             </div>
 
             <!-- Edit "I Think" Message -->
-            <div class="section">
+            <div class="section" id="section-ithink">
                 <h2>💭 Edit "I THINK" Message</h2>
                 <div class="form-grid">
                     <div class="form-group full-width">
@@ -432,8 +439,35 @@
                 <button class="btn-primary" onclick="saveIThinkMessage()">Update Message</button>
             </div>
 
+            <!-- Manage External APIs (Other.html) -->
+            <div class="section" id="section-apis">
+                <h2>🌍 External APIs (Other.html)</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                    Enter a City Name to add it to the secondary page.
+                </p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>City Name</label>
+                        <input type="text" id="api-city" placeholder="e.g. London">
+                    </div>
+                    <div class="form-group">
+                        <label>API Key (OpenWeatherMap)</label>
+                        <input type="text" id="api-key" value="e89f102cfd638cfbd540bdf7fa673649">
+                    </div>
+                </div>
+                <div class="form-actions" style="display: flex; gap: 10px; margin-bottom: 20px;">
+                    <button class="btn-secondary" id="btn-test-api" style="flex: 1;" onclick="testApiConnection()">Test City</button>
+                    <button class="btn-primary" style="flex: 1;" id="btn-add-api" onclick="addExternalApi()">Add City</button>
+                </div>
+                
+                <h3>Active Cities</h3>
+                <div id="api-list" style="margin-top: 10px;">
+                    <p style="color: #888; text-align: center;">No cities added.</p>
+                </div>
+            </div>
+
             <!-- Existing Predictions -->
-            <div class="section">
+            <div class="section" id="section-list">
                 <h2>📋 Existing Forecasts</h2>
                 <div id="predictions-admin-list">
                     <p style="color: #888; text-align: center;">Loading predictions...</p>
