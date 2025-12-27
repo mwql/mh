@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FutureCast | Kuwait Live Weather</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+    <style>
+        :root {
+            --bg-color: #0c0c14;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent-color: #06b6d4;
+            --glass-bg: rgba(15, 23, 42, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            background-color: var(--bg-color) !important;
+            background: radial-gradient(circle at 50% 50%, #171725 0%, #0c0c14 100%) !important;
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .background-blobs {
+            display: none !important;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 20px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .section-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 32px;
+            margin-bottom: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        /* Overriding some style.css defaults for the new layout */
+        .main-container {
+            background: transparent !important;
+            border: none !important;
+            backdrop-filter: none !important;
+            padding: 0 !important;
+            box-shadow: none !important;
+            max-width: none !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <header class="header-panel">
+            <a href="index.html">
+                <img src="img/Mahdawi_Weather.png" alt="Mahdawi Weather Logo" width="280">
+            </a>
+            <p class="subtitle">
+                Live weather forecast for <span id="target-date-inline">Kuwait</span>
+            </p>
+        </header>
+
+        <section class="section-panel predictions-list-section">
+            <h3 style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 2px; color: var(--text-muted); margin-bottom: 16px; font-weight: 600;">Live Kuwait Weather</h3>
+            <div id="predictions-list" class="predictions-grid">
+                <p class="empty-state">Fetching live weather data...</p>
+            </div>
+        </section>
+
+        <footer class="section-panel" style="text-align: center;">
+            <a href="index.html" class="link-secondary">&larr; Back to My Predictions</a>
+        </footer>
+    </div>
+
+    <script src="analytics.js"></script>
+    <script>
+        // Fallback or immediate date display
+        document.addEventListener('DOMContentLoaded', () => {
+            const inlineDateDisplay = document.getElementById('target-date-inline');
+            if (inlineDateDisplay) {
+                const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                inlineDateDisplay.textContent = new Date().toLocaleDateString('en-US', options);
+            }
+        });
+    </script>
+    <script type="module" src="script.js?v=2"></script>
+
+</body>
+</html>
+
