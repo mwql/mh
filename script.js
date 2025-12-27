@@ -188,7 +188,7 @@ async function displayPredictions(predictions) {
     // Filter out config items (Robust check)
     const actualForecasts = predictions.filter(p => {
         const cond = (p.condition || '').trim();
-        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__' && cond !== '__HEADER_ASSET__';
+        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__' && cond !== '__HEADER_ASSET__' && cond !== '__THEME_CONFIG__';
     });
 
     // -----------------------------
@@ -375,6 +375,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 headerImg.style.objectFit = "cover";
             } else {
                 headerImg.src = 'img/Mahdawi_Weather.png';
+            }
+        }
+
+        // Apply Theme
+        const themeConfig = predictions.find(p => p.condition === '__THEME_CONFIG__');
+        if (themeConfig && themeConfig.notes) {
+            try {
+                const theme = JSON.parse(themeConfig.notes);
+                const r = document.documentElement;
+                
+                // Helper to apply if exists
+                if(theme.bg) r.style.setProperty('--bg-color', theme.bg);
+                if(theme.text) r.style.setProperty('--text-color', theme.text);
+                if(theme.primary) r.style.setProperty('--primary-color', theme.primary);
+                if(theme.accent) r.style.setProperty('--accent-color', theme.accent);
+                if(theme.cardBg) r.style.setProperty('--card-bg', theme.cardBg);
+                if(theme.cardBorder) r.style.setProperty('--card-border', theme.cardBorder);
+                if(theme.glassBg) r.style.setProperty('--glass-bg', theme.glassBg);
+                if(theme.glassBorder) r.style.setProperty('--glass-border', theme.glassBorder);
+            } catch(e) {
+                console.error("Error applying theme", e);
             }
         }
 

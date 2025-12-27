@@ -354,7 +354,7 @@
                 </div>
             </div>
 
-            <!-- Analytics Card -->
+            <!-- 1. Analytics Card -->
             <div class="analytics-card" id="section-analytics" style="position: relative;">
                 <h2>📈 Today's Page Views</h2>
                 <div class="view-count" id="view-count">0</div>
@@ -367,7 +367,7 @@
                 </button>
             </div>
 
-            <!-- Supabase Settings -->
+            <!-- 2. Supabase Sync Settings -->
             <div class="section" id="section-settings">
                 <h2>⚙️ Supabase Sync Settings</h2>
                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
@@ -394,7 +394,74 @@
                 <div id="sync-last-status" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); text-align: center;"></div>
             </div>
 
-            <!-- Add New Prediction -->
+            <!-- 3. Header Image Library -->
+            <div class="section" id="section-header-image">
+                <h2>🖼️ Header Library</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                    Manage your header images. Upload to Library, then select one to Activate.
+                </p>
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 24px; text-align: center;">
+                    <h3 style="color: #10b981; font-size: 0.9rem; margin-bottom: 10px; text-transform: uppercase;">Currently Active</h3>
+                    <div id="active-header-display">
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Using Default Logo</p>
+                    </div>
+                    <button id="btn-remove-active" onclick="removeActiveHeader()" style="margin-top: 10px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; display: none;">
+                        Revert to Default
+                    </button>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Upload New Image to Library</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="file" id="header-file-input" accept="image/*" onchange="handleHeaderImageSelect(event)" style="display: none;">
+                            <label for="header-file-input" class="btn-primary" style="display: inline-block; cursor: pointer; text-align: center; margin: 0; width: auto; flex: 0 0 auto;">
+                                📁 Choose Image
+                            </label>
+                            <span id="file-chosen-text" style="color: var(--text-muted); font-size: 0.9rem;">No file chosen</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="header-preview-container" style="display: none; margin-bottom: 15px; text-align: center; margin-top: 15px;">
+                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px;">Preview:</p>
+                    <img id="header-preview" src="" style="max-width: 100%; max-height: 200px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    <div style="margin-top: 15px;">
+                        <button class="btn-primary" onclick="uploadHeaderAsset()" style="background: #10b981;">Save to Library</button>
+                    </div>
+                </div>
+                <h3 style="color: white; font-size: 1rem; margin-bottom: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">📚 Library</h3>
+                <div id="header-library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px;">
+                    <p style="color: var(--text-muted); font-size: 0.8rem; grid-column: 1/-1; text-align: center;">Library is empty.</p>
+                </div>
+            </div>
+
+            <!-- 4. Target Date Settings -->
+            <div class="section" id="section-target-date">
+                <h2>📅 Target Date Settings</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                    Select the date to show on the main page. Leave empty to show the live date.
+                </p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Target Date</label>
+                        <input type="date" id="admin-target-date">
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="saveTargetDate()">Update Date</button>
+            </div>
+
+            <!-- 5. Edit "I Think" Message -->
+            <div class="section" id="section-ithink">
+                <h2>💭 Edit "I THINK" Message</h2>
+                <div class="form-grid">
+                    <div class="form-group full-width">
+                        <label>Main Page Message</label>
+                        <textarea id="ithink-message" placeholder="Enter the message to display on the main page..."></textarea>
+                    </div>
+                </div>
+                <button class="btn-primary" onclick="saveIThinkMessage()">Update Message</button>
+            </div>
+
+            <!-- 6. Add New Prediction -->
             <div class="section" id="section-add">
                 <h2>➕ Add New Forecast</h2>
                 <div class="form-grid">
@@ -430,82 +497,15 @@
                 <button class="btn-primary" onclick="addPrediction()">Add Forecast</button>
             </div>
 
-            <!-- Edit "I Think" Message -->
-            <div class="section" id="section-ithink">
-                <h2>💭 Edit "I THINK" Message</h2>
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label>Main Page Message</label>
-                        <textarea id="ithink-message" placeholder="Enter the message to display on the main page..."></textarea>
-                    </div>
-                </div>
-                <button class="btn-primary" onclick="saveIThinkMessage()">Update Message</button>
-            </div>
-
-            <!-- Target Date Settings -->
-            <div class="section" id="section-target-date">
-                <h2>📅 Target Date Settings</h2>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
-                    Select the date to show on the main page. Leave empty to show the live date.
-                </p>
-                <div class="form-grid">
-                    <div class="form-group">
-                        <label>Target Date</label>
-                        <input type="date" id="admin-target-date">
-                    </div>
-                </div>
-                <button class="btn-primary" onclick="saveTargetDate()">Update Date</button>
-            </div>
-
-            <!-- Header Image Library -->
-            <div class="section" id="section-header-image">
-                <h2>🖼️ Header Library</h2>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
-                    Manage your header images. Upload to Library, then select one to Activate.
-                </p>
-
-                <!-- Active Header -->
-                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 24px; text-align: center;">
-                    <h3 style="color: #10b981; font-size: 0.9rem; margin-bottom: 10px; text-transform: uppercase;">Currently Active</h3>
-                    <div id="active-header-display">
-                        <p style="color: var(--text-muted); font-size: 0.85rem;">Using Default Logo</p>
-                    </div>
-                    <button id="btn-remove-active" onclick="removeActiveHeader()" style="margin-top: 10px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; display: none;">
-                        Revert to Default
-                    </button>
-                </div>
-
-                <!-- Upload New Asset -->
-                <div class="form-grid">
-                    <div class="form-group full-width">
-                        <label>Upload New Image to Library</label>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <input type="file" id="header-file-input" accept="image/*" onchange="handleHeaderImageSelect(event)" style="display: none;">
-                            <label for="header-file-input" class="btn-primary" style="display: inline-block; cursor: pointer; text-align: center; margin: 0; width: auto; flex: 0 0 auto;">
-                                📁 Choose Image
-                            </label>
-                            <span id="file-chosen-text" style="color: var(--text-muted); font-size: 0.9rem;">No file chosen</span>
-                        </div>
-                    </div>
-                </div>
-                
-                <div id="header-preview-container" style="display: none; margin-bottom: 15px; text-align: center; margin-top: 15px;">
-                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px;">Preview:</p>
-                    <img id="header-preview" src="" style="max-width: 100%; max-height: 200px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
-                    <div style="margin-top: 15px;">
-                        <button class="btn-primary" onclick="uploadHeaderAsset()" style="background: #10b981;">Save to Library</button>
-                    </div>
-                </div>
-
-                <!-- Library Grid -->
-                <h3 style="color: white; font-size: 1rem; margin-bottom: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">📚 Library</h3>
-                <div id="header-library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px;">
-                    <!-- Assets injected here -->
-                    <p style="color: var(--text-muted); font-size: 0.8rem; grid-column: 1/-1; text-align: center;">Library is empty.</p>
+            <!-- 7. Existing Predictions -->
+            <div class="section" id="section-list">
+                <h2>📋 Existing Forecasts</h2>
+                <div id="predictions-admin-list">
+                    <p style="color: #888; text-align: center;">Loading predictions...</p>
                 </div>
             </div>
 
-            <!-- Manage External APIs (Other.html) -->
+            <!-- 8. Manage External APIs -->
             <div class="section" id="section-apis">
                 <h2>🌍 External APIs (Other.html)</h2>
                 <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
@@ -525,18 +525,93 @@
                     <button class="btn-secondary" id="btn-test-api" style="flex: 1;" onclick="testApiConnection()">Test City</button>
                     <button class="btn-primary" style="flex: 1;" id="btn-add-api" onclick="addExternalApi()">Add City</button>
                 </div>
-                
                 <h3>Active Cities</h3>
                 <div id="api-list" style="margin-top: 10px;">
                     <p style="color: #888; text-align: center;">No cities added.</p>
                 </div>
             </div>
 
-            <!-- Existing Predictions -->
-            <div class="section" id="section-list">
-                <h2>📋 Existing Forecasts</h2>
-                <div id="predictions-admin-list">
-                    <p style="color: #888; text-align: center;">Loading predictions...</p>
+            <!-- 9. Theme Editor (Bottom) -->
+            <div class="section" id="section-theme">
+                <h2>🎨 Theme Editor</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
+                    Customize the colors of the website.
+                </p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Background Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-bg-color" value="#0c0c14" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-bg-text" value="#0c0c14" style="flex: 1;" onchange="document.getElementById('theme-bg-color').value = this.value">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Text Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-text-color" value="#f8fafc" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-text-text" value="#f8fafc" style="flex: 1;" onchange="document.getElementById('theme-text-color').value = this.value">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Primary Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-primary-color" value="#3b82f6" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-primary-text" value="#3b82f6" style="flex: 1;" onchange="document.getElementById('theme-primary-color').value = this.value">
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Used for buttons and highlights</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Accent Color</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-accent-color" value="#06b6d4" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-accent-text" value="#06b6d4" style="flex: 1;" onchange="document.getElementById('theme-accent-color').value = this.value">
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Used for decorations and icons</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Card Background</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-card-bg-color" value="#ffffff" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-card-bg-text" value="rgba(255, 255, 255, 0.05)" style="flex: 1;" onchange="document.getElementById('theme-card-bg-color').value = this.value">
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Background for prediction cards</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Card Border</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-card-border-color" value="#ffffff" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-card-border-text" value="rgba(255, 255, 255, 0.1)" style="flex: 1;" onchange="document.getElementById('theme-card-border-color').value = this.value">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Glass Background</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-glass-bg-color" value="#0f172a" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-glass-bg-text" value="rgba(15, 23, 42, 0.7)" style="flex: 1;" onchange="document.getElementById('theme-glass-bg-color').value = this.value">
+                        </div>
+                        <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Main container background</p>
+                    </div>
+                    <div class="form-group">
+                        <label>Glass Border</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="color" id="theme-glass-border-color" value="#ffffff" style="padding: 2px; height: 40px; width: 60px;">
+                            <input type="text" id="theme-glass-border-text" value="rgba(255, 255, 255, 0.08)" style="flex: 1;" onchange="document.getElementById('theme-glass-border-color').value = this.value">
+                        </div>
+                    </div>
+                </div>
+                <script>
+                    ['bg', 'text', 'primary', 'accent', 'card-bg', 'card-border', 'glass-bg', 'glass-border'].forEach(type => {
+                        const colorInput = document.getElementById(`theme-${type}-color`);
+                        const textInput = document.getElementById(`theme-${type}-text`);
+                        if(colorInput && textInput) {
+                            colorInput.addEventListener('input', (e) => textInput.value = e.target.value);
+                            textInput.addEventListener('input', (e) => colorInput.value = e.target.value);
+                        }
+                    });
+                </script>
+                <div class="form-actions" style="display: flex; gap: 10px; margin-top: 15px;">
+                    <button class="btn-primary" style="flex: 2;" onclick="saveThemeSettings()">💾 Save Theme</button>
+                    <button class="btn-secondary" style="flex: 1; background: rgba(239, 68, 68, 0.1); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2);" onclick="resetThemeSettings()">🔄 Reset</button>
                 </div>
             </div>
         </div>

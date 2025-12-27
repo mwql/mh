@@ -2,7 +2,7 @@
 // ADMIN PAGE FUNCTIONALITY
 // =============================
 
-const ADMIN_PASSWORD = "2"; // Password: 2
+const ADMIN_PASSWORD = "0102"; // Password: 0102
 const USER_PASSWORD = "11"; // Password: 11
 const PREDICTIONS_STORAGE_KEY = "weatherPredictions";
 const ITHINK_STORAGE_KEY = "ithinkMessage";
@@ -12,6 +12,7 @@ const SB_SETTINGS_KEY = "supabaseSyncSettings";
 let currentUserRole = null; // 'admin' or 'user'
 let userSessionUploadCount = 0;
 const USER_UPLOAD_LIMIT = 2;
+const USER_API_LIMIT = 2; // Max 2 API cities for users
 
 // API Management State (Global to avoid TDZ)
 let pendingApiValid = false;
@@ -43,6 +44,8 @@ window.testApiConnection = testApiConnection;
 window.addExternalApi = addExternalApi;
 window.removeApi = removeApi;
 window.debugAnalytics = debugAnalytics;
+window.saveThemeSettings = saveThemeSettings;
+window.resetThemeSettings = resetThemeSettings;
 
 // Load Supabase settings from localStorage
 function loadSupabaseSettings() {
@@ -425,6 +428,7 @@ function updateUIForRole() {
     const headerImageSection = document.getElementById('section-header-image');
     const apiSection = document.getElementById('section-apis');
     const listSection = document.getElementById('section-list');
+    const themeSection = document.getElementById('section-theme');
     
     // Default: Show all
     if (analytics) analytics.style.display = 'block';
@@ -435,6 +439,7 @@ function updateUIForRole() {
     if (headerImageSection) headerImageSection.style.display = 'block';
     if (apiSection) apiSection.style.display = 'block';
     if (listSection) listSection.style.display = 'block';
+    if (themeSection) themeSection.style.display = 'block';
     
     // User restrictions
     if (currentUserRole === 'user') {
@@ -442,9 +447,8 @@ function updateUIForRole() {
         if (settings) settings.style.display = 'none';
         if (iThink) iThink.style.display = 'none';
         if (targetDateSection) targetDateSection.style.display = 'none';
-        if (headerImageSection) headerImageSection.style.display = 'none';
-        if (apiSection) apiSection.style.display = 'none';
-        // Keep 'Add' and 'List' visible
+        if (themeSection) themeSection.style.display = 'none';
+        // Keep 'Add', 'List', 'Header Image', and 'API' visible (with logic-based restrictions)
     }
 }
 
@@ -598,6 +602,12 @@ async function uploadHeaderAsset() {
 
 // 2. Activate an Asset
 async function activateHeaderAsset(indexInLibrary) {
+    // PERMISSION CHECK: Only admin can activate headers
+    if (currentUserRole !== 'admin') {
+        alert('⚠️ Only administrators can activate header images.');
+        return;
+    }
+    
     // Re-find assets to get correct data
     const assets = currentPredictions.filter(p => p.condition === '__HEADER_ASSET__');
     const asset = assets[indexInLibrary]; // index matches rendered list
@@ -625,6 +635,12 @@ async function activateHeaderAsset(indexInLibrary) {
 
 // 3. Remove Active Header
 async function removeActiveHeader() {
+    // PERMISSION CHECK: Only admin can remove active header
+    if (currentUserRole !== 'admin') {
+        alert('⚠️ Only administrators can change the active header.');
+        return;
+    }
+    
     if(!confirm('Revert to default logo?')) return;
     
     const initialLength = currentPredictions.length;
@@ -680,7 +696,8 @@ async function loadHeaderLibrary() {
     
     if (activeHeader && activeHeader.notes) {
         activeContainer.innerHTML = `<img src="${activeHeader.notes}" style="max-height: 100px; max-width: 100%; border-radius: 8px;">`;
-        if(removeBtn) removeBtn.style.display = 'inline-block';
+        // Only admin can see the revert button
+        if(removeBtn) removeBtn.style.display = currentUserRole === 'admin' ? 'inline-block' : 'none';
     } else {
         activeContainer.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">Using Default Logo</p>`;
         if(removeBtn) removeBtn.style.display = 'none';
@@ -702,10 +719,15 @@ async function loadHeaderLibrary() {
             const borderStyle = isActive ? 'border: 2px solid #10b981;' : '';
             if(isActive) item.style.border = '2px solid #10b981';
 
+            // Only admin can activate images, users can only delete
+            const activateBtn = currentUserRole === 'admin' 
+                ? `<button onclick="activateHeaderAsset(${index})" title="Use This" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">✅</button>`
+                : '';
+
             item.innerHTML = `
                 <img src="${asset.notes}" style="width: 100%; height: 100%; object-fit: cover;">
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: space-between; padding: 5px; z-index: 10;">
-                    <button onclick="activateHeaderAsset(${index})" title="Use This" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">✅</button>
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: ${currentUserRole === 'admin' ? 'space-between' : 'center'}; padding: 5px; z-index: 10;">
+                    ${activateBtn}
                     <button onclick="deleteHeaderAsset(${index})" title="Delete" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">🗑️</button>
                 </div>
             `;
@@ -720,6 +742,7 @@ async function loadAdminData() {
     await loadPredictionsForAdmin();
     await loadIThinkMessage();
     await loadTargetDate();
+    await loadThemeSettings(); // Load Theme
     // await loadHeaderImage(); // Replaced
     loadHeaderLibrary(); // New loader
     loadApis();
@@ -819,11 +842,23 @@ async function loadApis() {
     list.forEach((api, index) => {
         const item = document.createElement('div');
         item.style.cssText = 'background: rgba(255,255,255,0.05); padding: 10px; margin-bottom: 8px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;';
+        
+        // Determine if current user can remove this city
+        // Admin can remove any, User can only remove their own
+        const canRemove = currentUserRole === 'admin' || api.addedBy === 'user';
+        const addedByBadge = api.addedBy === 'user' 
+            ? '<span style="font-size:0.7rem;color:#888;margin-left:8px;">(User)</span>' 
+            : '<span style="font-size:0.7rem;color:#888;margin-left:8px;">(Admin)</span>';
+        
+        const removeBtn = canRemove 
+            ? `<button onclick="removeApi(${index})" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 4px 10px; font-size: 0.8rem; border: none;">Remove</button>`
+            : `<span style="color:#888;font-size:0.75rem;">Admin Only</span>`;
+        
         item.innerHTML = `
             <div>
-                <strong style="color: white;">${api.name}</strong>
+                <strong style="color: white;">${api.name}</strong>${addedByBadge}
             </div>
-            <button onclick="removeApi(${index})" style="background: rgba(239, 68, 68, 0.2); color: #ef4444; padding: 4px 10px; font-size: 0.8rem; border: none;">Remove</button>
+            ${removeBtn}
         `;
         container.appendChild(item);
     });
@@ -862,7 +897,17 @@ async function addExternalApi() {
             return;
         }
 
-        list.push({ name: name, url: pendingApiUrl });
+        // USER LIMIT CHECK: Users can only add 2 cities
+        if (currentUserRole === 'user') {
+            const userCities = list.filter(api => api.addedBy === 'user');
+            if (userCities.length >= USER_API_LIMIT) {
+                alert(`⚠️ You can only add ${USER_API_LIMIT} cities as a user. Please contact the admin to add more.`);
+                return;
+            }
+        }
+
+        // Track who added this city
+        list.push({ name: name, url: pendingApiUrl, addedBy: currentUserRole });
         
         await saveApis(list);
         
@@ -887,6 +932,13 @@ async function removeApi(index) {
     if (!confirm('Remove this API?')) return;
     
     const list = await getApiList();
+    
+    // Permission check: Users can only remove cities they added
+    if (currentUserRole === 'user' && list[index].addedBy !== 'user') {
+        alert('⚠️ You can only remove cities that you added.');
+        return;
+    }
+    
     list.splice(index, 1);
     await saveApis(list);
     loadApis();
@@ -1226,3 +1278,141 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 });
+
+// ========================
+// THEME EDITOR LOGIC
+// ========================
+
+// Load Theme Settings
+async function loadThemeSettings() {
+    const configItem = currentPredictions.find(p => p.condition === '__THEME_CONFIG__');
+    if (configItem && configItem.notes) {
+        try {
+            const theme = JSON.parse(configItem.notes);
+            
+            // Update Inputs
+            const updateInput = (type, val) => {
+                const colorInput = document.getElementById(`theme-${type}-color`);
+                const textInput = document.getElementById(`theme-${type}-text`);
+                if(colorInput) colorInput.value = val;
+                if(textInput) textInput.value = val;
+            };
+
+            if(theme.bg) updateInput('bg', theme.bg);
+            if(theme.text) updateInput('text', theme.text);
+            if(theme.primary) updateInput('primary', theme.primary);
+            if(theme.accent) updateInput('accent', theme.accent);
+            if(theme.cardBg) updateInput('card-bg', theme.cardBg);
+            if(theme.cardBorder) updateInput('card-border', theme.cardBorder);
+            if(theme.glassBg) updateInput('glass-bg', theme.glassBg);
+            if(theme.glassBorder) updateInput('glass-border', theme.glassBorder);
+
+            // Apply to Admin Page (Optional, but nice for preview)
+            const r = document.documentElement;
+            if(theme.bg) r.style.setProperty('--bg-color', theme.bg);
+            if(theme.text) r.style.setProperty('--text-color', theme.text);
+            if(theme.primary) r.style.setProperty('--primary-color', theme.primary);
+            if(theme.accent) r.style.setProperty('--accent-color', theme.accent);
+            if(theme.cardBg) r.style.setProperty('--card-bg', theme.cardBg);
+            if(theme.cardBorder) r.style.setProperty('--card-border', theme.cardBorder);
+            if(theme.glassBg) r.style.setProperty('--glass-bg', theme.glassBg);
+            if(theme.glassBorder) r.style.setProperty('--glass-border', theme.glassBorder);
+            
+        } catch(e) {
+            console.error("Error parsing theme config", e);
+        }
+    }
+}
+
+// Save Theme Settings
+async function saveThemeSettings() {
+    const theme = {
+        bg: document.getElementById('theme-bg-text').value,
+        text: document.getElementById('theme-text-text').value,
+        primary: document.getElementById('theme-primary-text').value,
+        accent: document.getElementById('theme-accent-text').value,
+        cardBg: document.getElementById('theme-card-bg-text').value,
+        cardBorder: document.getElementById('theme-card-border-text').value,
+        glassBg: document.getElementById('theme-glass-bg-text').value,
+        glassBorder: document.getElementById('theme-glass-border-text').value
+    };
+
+    // Find or create config item
+    let configItem = currentPredictions.find(p => p.condition === '__THEME_CONFIG__');
+    if (configItem) {
+        configItem.notes = JSON.stringify(theme);
+    } else {
+        currentPredictions.push({
+            date: '2000-01-01',
+            temperature: '0',
+            condition: '__THEME_CONFIG__',
+            notes: JSON.stringify(theme)
+        });
+    }
+
+    // Apply immediately
+    const r = document.documentElement;
+    r.style.setProperty('--bg-color', theme.bg);
+    r.style.setProperty('--text-color', theme.text);
+    r.style.setProperty('--primary-color', theme.primary);
+    r.style.setProperty('--accent-color', theme.accent);
+    r.style.setProperty('--card-bg', theme.cardBg);
+    r.style.setProperty('--card-border', theme.cardBorder);
+    r.style.setProperty('--glass-bg', theme.glassBg);
+    r.style.setProperty('--glass-border', theme.glassBorder);
+
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Theme updated successfully!');
+}
+
+// Reset Theme Settings
+async function resetThemeSettings() {
+    if(!confirm("Reset all colors to default?")) return;
+
+    // Remove config item
+    currentPredictions = currentPredictions.filter(p => p.condition !== '__THEME_CONFIG__');
+    
+    // Reset Inputs
+    const defaults = {
+        bg: '#0c0c14',
+        text: '#f8fafc',
+        primary: '#3b82f6',
+        accent: '#06b6d4',
+        cardBg: 'rgba(255, 255, 255, 0.05)',
+        cardBorder: 'rgba(255, 255, 255, 0.1)',
+        glassBg: 'rgba(15, 23, 42, 0.7)',
+        glassBorder: 'rgba(255, 255, 255, 0.08)'
+    };
+    
+    const updateInput = (type, val) => {
+        const colorInput = document.getElementById(`theme-${type}-color`);
+        const textInput = document.getElementById(`theme-${type}-text`);
+        if(colorInput) colorInput.value = val;
+        if(textInput) textInput.value = val;
+    };
+
+    updateInput('bg', defaults.bg);
+    updateInput('text', defaults.text);
+    updateInput('primary', defaults.primary);
+    updateInput('accent', defaults.accent);
+    updateInput('card-bg', defaults.cardBg);
+    updateInput('card-border', defaults.cardBorder);
+    updateInput('glass-bg', defaults.glassBg);
+    updateInput('glass-border', defaults.glassBorder);
+
+    // Reset Styles
+    const r = document.documentElement;
+    r.style.removeProperty('--bg-color');
+    r.style.removeProperty('--text-color');
+    r.style.removeProperty('--primary-color');
+    r.style.removeProperty('--accent-color');
+    r.style.removeProperty('--card-bg');
+    r.style.removeProperty('--card-border');
+    r.style.removeProperty('--glass-bg');
+    r.style.removeProperty('--glass-border');
+
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Theme reset to default.');
+}
