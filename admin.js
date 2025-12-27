@@ -19,9 +19,8 @@ let pendingApiUrl = '';
 let pendingApiName = '';
 let currentPredictions = []; // Global predictions array
 
-// GLOBAL SUPABASE CONFIG (Added for cross-device sync)
-const SB_URL = "https://jfmvebvwovibxuxskrcd.supabase.co";
-const SB_KEY = "sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh";
+// GLOBAL SUPABASE CONFIG
+// SB_URL and SB_KEY are provided by analytics.js to avoid duplication/collision
 
 // Make functions global immediately (Top of file to ensure they are available to UI)
 window.checkPassword = checkPassword;
@@ -434,6 +433,16 @@ function updateUIForRole() {
     }
 }
 
+// Load "I Think" message
+async function loadIThinkMessage() {
+    // Find config item
+    const configItem = currentPredictions.find(p => p.condition === '__ITHINK__');
+    if (configItem && configItem.notes) {
+        const textarea = document.getElementById('ithink-message');
+        if (textarea) textarea.value = configItem.notes;
+    }
+}
+
 // Load admin data
 async function loadAdminData() {
     loadSupabaseSettings(); // Load settings first
@@ -629,11 +638,27 @@ async function saveApis(list) {
 
 // Update analytics
 function updateAnalytics() {
-  if (typeof getTodayPageViews === "function") {
-    const viewData = getTodayPageViews();
-    document.getElementById("view-count").textContent = viewData.count;
+    let count = 0;
+    let dateStr = new Date().toISOString().split('T')[0];
+    
+    // Find analytics item in currentPredictions
+    const analyticsItem = currentPredictions.find(p => p.condition === '__ANALYTICS__');
+    
+    if (analyticsItem && analyticsItem.notes) {
+        try {
+            const data = JSON.parse(analyticsItem.notes);
+            // Only show if date matches today (or show stored date?)
+            // Usually we want to show what the DB says is "today's" count.
+            count = data.count || 0;
+            dateStr = data.date || dateStr;
+        } catch (e) {
+            console.error('Admin: Error parsing analytics', e);
+        }
+    }
+    
+    document.getElementById("view-count").textContent = count;
 
-    const dateObj = new Date(viewData.date + "T00:00:00");
+    const dateObj = new Date(dateStr + "T00:00:00");
     const options = {
       weekday: "long",
       year: "numeric",
@@ -642,20 +667,40 @@ function updateAnalytics() {
     };
     document.getElementById("analytics-date").textContent =
       dateObj.toLocaleDateString("en-US", options);
-  }
 }
 
 // Reset Views Handler
-function handleResetViews() {
-    if (confirm('Are you sure you want to reset the view counter to 0?')) {
-        if (typeof resetDailyViews === 'function') {
-            resetDailyViews();
-            updateAnalytics();
-            alert('Counter reset to 0.');
-        } else {
-            console.error('resetDailyViews function not found');
-        }
+async function handleResetViews() {
+    if (!confirm('Are you sure you want to reset the global view counter to 0?')) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const newStats = { date: today, count: 0 };
+    
+    // Find or create
+    let analyticsItem = currentPredictions.find(p => p.condition === '__ANALYTICS__');
+    
+    if (analyticsItem) {
+        analyticsItem.notes = JSON.stringify(newStats);
+        // Also ensure date/temp are valid stub values
+        analyticsItem.date = '2000-01-01';
+        analyticsItem.temperature = '0';
+    } else {
+        currentPredictions.push({
+            condition: '__ANALYTICS__',
+            notes: JSON.stringify(newStats),
+            date: '2000-01-01',
+            temperature: '0'
+        });
     }
+    
+    // Update UI immediately (optimistic)
+    updateAnalytics();
+    
+    // Save
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    
+    alert('Global counter reset to 0.');
 }
 
 // Load predictions for admin
@@ -682,7 +727,7 @@ function displayPredictionsInAdmin(predictions) {
 
   predictions.forEach((pred, index) => {
     // Skip config items
-    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__') return;
+    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__') return;
 
     const card = document.createElement("div");
     card.className = "admin-prediction-card";

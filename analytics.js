@@ -1,6 +1,9 @@
 // =============================
-// PAGE VIEW ANALYTICS
+// PAGE VIEW ANALYTICS (Synced)
 // =============================
+
+const SB_URL = 'https://jfmvebvwovibxuxskrcd.supabase.co';
+const SB_KEY = 'sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh';
 
 // Get today's date in YYYY-MM-DD format
 function getTodayDate() {
@@ -11,80 +14,95 @@ function getTodayDate() {
     return `${year}-${month}-${day}`;
 }
 
-// Track a page view (Unique per day per device)
-function trackPageView() {
+// Track a page view (Unique per day per device, Synced to DB)
+async function trackPageView() {
     const today = getTodayDate();
-    const storageKey = 'pageViews';
-    const visitTokenKey = `visit_token_${today}`;
+    const visitTokenKey = `sync_v3_token_${today}`;
     
-    // Check if already visited today on this device
+    // 1. Check if already visited today on this device
     if (localStorage.getItem(visitTokenKey)) {
-        return; // Already counted today
+        console.log('Analytics: Already visited today');
+        return; 
     }
     
-    // Get existing data
-    let viewData = localStorage.getItem(storageKey);
-    let views = viewData ? JSON.parse(viewData) : {};
-    
-    // If it's a new day, reset the counter
-    if (views.date !== today) {
-        views = {
-            date: today,
-            count: 0
+    console.log('Analytics: recording new visit...');
+
+    try {
+        const url = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions`;
+        
+        // 2. Fetch existing analytics record
+        const response = await fetch(`${url}?condition=eq.__ANALYTICS__&select=*`, {
+            headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+        });
+
+        if (!response.ok) throw new Error('Failed to fetch analytics');
+        
+        const data = await response.json();
+        let record = data.length > 0 ? data[0] : null;
+        
+        let views = { date: today, count: 0 };
+        
+        // Parse existing data
+        if (record && record.notes) {
+            try {
+                const storedViews = JSON.parse(record.notes);
+                // If it's the same day, keep the count. If new day, reset (logic handled by just initializing 0 above)
+                if (storedViews.date === today) {
+                    views = storedViews;
+                }
+            } catch (e) {}
+        }
+        
+        // 3. Increment
+        views.count++;
+        views.date = today; // Ensure date is current
+        
+        const payload = {
+            condition: '__ANALYTICS__',
+            notes: JSON.stringify(views),
+            date: '2000-01-01', // Dummy date
+            temperature: '0'     // Dummy temp
         };
+
+        // 4. Update or Insert
+        let updateUrl = url;
+        let method = 'POST';
+        
+        if (record) {
+            // Update existing using ID if possible (safer), else condition
+            if (record.id) {
+                updateUrl = `${url}?id=eq.${record.id}`;
+            } else {
+                updateUrl = `${url}?condition=eq.__ANALYTICS__`;
+            }
+            method = 'PATCH';
+        }
+        
+        await fetch(updateUrl, {
+            method: method,
+            headers: {
+                'apikey': SB_KEY,
+                'Authorization': `Bearer ${SB_KEY}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payload)
+        });
+        
+        // 5. Mark as visited locally
+        localStorage.setItem(visitTokenKey, 'true');
+        console.log('Analytics: Visit synced successfully');
+
+    } catch (error) {
+        console.error('Analytics Limit/Error:', error);
     }
-    
-    // Increment the counter
-    views.count++;
-    
-    // Save back to localStorage
-    localStorage.setItem(storageKey, JSON.stringify(views));
-    
-    // Mark this device as visited for today
-    localStorage.setItem(visitTokenKey, 'true');
 }
 
-// Get today's page view count
-function getTodayPageViews() {
-    const today = getTodayDate();
-    const storageKey = 'pageViews';
-    
-    let viewData = localStorage.getItem(storageKey);
-    let views = viewData ? JSON.parse(viewData) : {};
-    
-    // If the stored date is not today, return 0
-    if (views.date !== today) {
-        return {
-            date: today,
-            count: 0
-        };
-    }
-    
-    return views;
-}
+// Helper to reset views (Admin use mainly, but logic lives here or in admin.js)
+// Since we are moving to DB, admin.js should handle the DB update directly for reset.
+// We keep this for local testing or valid fallback.
 
-// Reset daily views (Admin function)
-function resetDailyViews() {
-    const today = getTodayDate();
-    const storageKey = 'pageViews';
-    const visitTokenKey = `visit_token_${today}`;
-    
-    const views = {
-        date: today,
-        count: 0
-    };
-    
-    localStorage.setItem(storageKey, JSON.stringify(views));
-    localStorage.removeItem(visitTokenKey); // Allow counting again if desired, or keep it? 
-    // Usually reset implies we want to start over, so removing token allows "me" to be counted again as 1.
-    
-    return views;
-}
-
-// Make globally available
-window.resetDailyViews = resetDailyViews;
-
-// Auto-track page view when script loads (only on index.html)
+// Auto-track page view when script loads
 if (window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/')) {
     trackPageView();
 }

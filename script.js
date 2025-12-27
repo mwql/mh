@@ -176,8 +176,11 @@ async function displayPredictions(predictions) {
     
     listContainer.innerHTML = '';
 
-    // Filter out config items
-    const actualForecasts = predictions.filter(p => p.condition !== '__ITHINK__' && p.condition !== '__EXTERNAL_APIS__');
+    // Filter out config items (Robust check)
+    const actualForecasts = predictions.filter(p => {
+        const cond = (p.condition || '').trim();
+        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__';
+    });
 
     // -----------------------------
     // DYNAMIC EXTERNAL APIs (Only on other.html)
