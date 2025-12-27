@@ -35,6 +35,7 @@ window.saveIThinkMessage = saveIThinkMessage;
 window.testApiConnection = testApiConnection;
 window.addExternalApi = addExternalApi;
 window.removeApi = removeApi;
+window.debugAnalytics = debugAnalytics;
 
 // Load Supabase settings from localStorage
 function loadSupabaseSettings() {
@@ -450,7 +451,7 @@ async function loadAdminData() {
     await loadIThinkMessage();
     loadApis();
     updateAnalytics();
-    setInterval(updateAnalytics, 5000);
+    setInterval(updateAnalytics, 2000);
 }
 
 // ========================
@@ -636,71 +637,132 @@ async function saveApis(list) {
     await syncToSupabase(currentPredictions);
 }
 
-// Update analytics
-function updateAnalytics() {
+// Debug Analytics
+async function debugAnalytics() {
+    let url = SB_URL;
+    let key = SB_KEY;
+    if (!url || !key) {
+         const stored = localStorage.getItem(SB_SETTINGS_KEY);
+         if (stored) { const s = JSON.parse(stored); url = s.url; key = s.key; }
+    }
+    
+    if (!url || !key) { alert("Missing Credentials"); return; }
+    
+    alert(`Debug: Fetching from ${url}...`);
+    
+    try {
+        const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=eq.__VIEW_LOG__`;
+        const response = await fetch(requestUrl, {
+            method: 'HEAD',
+            headers: { 
+                'apikey': key, 
+                'Authorization': `Bearer ${key}`,
+                'Prefer': 'count=exact'
+            }
+        });
+        
+        const range = response.headers.get('Content-Range');
+        alert(`Status: ${response.status}\nRange Header: ${range}\nOK: ${response.ok}`);
+        
+    } catch(e) {
+        alert("Error: " + e.message);
+    }
+}    
+// Update analytics (Live Log Count)
+async function updateAnalytics() {
     let count = 0;
-    let dateStr = new Date().toISOString().split('T')[0];
     
-    // Find analytics item in currentPredictions
-    const analyticsItem = currentPredictions.find(p => p.condition === '__ANALYTICS__');
+    // 1. Try Live Supabase Fetch
+    let url = SB_URL;
+    let key = SB_KEY;
     
-    if (analyticsItem && analyticsItem.notes) {
+    if (!url || !key) {
         try {
-            const data = JSON.parse(analyticsItem.notes);
-            // Only show if date matches today (or show stored date?)
-            // Usually we want to show what the DB says is "today's" count.
-            count = data.count || 0;
-            dateStr = data.date || dateStr;
+            const stored = localStorage.getItem(SB_SETTINGS_KEY);
+            if (stored) {
+                const s = JSON.parse(stored);
+                url = s.url;
+                key = s.key;
+            }
+        } catch(e) {}
+    }
+
+    if (url && key) {
+        try {
+            // Count rows where condition = __VIEW_LOG__
+            // Using HEAD request + count=exact is efficient
+            const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=eq.__VIEW_LOG__`;
+            const response = await fetch(requestUrl, {
+                method: 'HEAD',
+                headers: { 
+                    'apikey': key, 
+                    'Authorization': `Bearer ${key}`,
+                    'Prefer': 'count=exact'
+                }
+            });
+            
+            if (response.ok) {
+                // Content-Range format: 0-9/10 or */10
+                const range = response.headers.get('Content-Range');
+                if (range) {
+                    const parts = range.split('/');
+                    if (parts.length === 2 && parts[1] !== '*') {
+                        count = parseInt(parts[1], 10);
+                    }
+                }
+            }
         } catch (e) {
-            console.error('Admin: Error parsing analytics', e);
+            console.error("Analytics live count failed", e);
         }
     }
     
-    document.getElementById("view-count").textContent = count;
+    // Update UI
+    const countEl = document.getElementById("view-count");
+    if (countEl) countEl.textContent = count;
 
-    const dateObj = new Date(dateStr + "T00:00:00");
-    const options = {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    };
-    document.getElementById("analytics-date").textContent =
-      dateObj.toLocaleDateString("en-US", options);
+    // Date is always today
+    const dateEl = document.getElementById("analytics-date");
+    if (dateEl) {
+        const options = { weekday: "long", year: "numeric", month: "long", day: "numeric" };
+        dateEl.textContent = new Date().toLocaleDateString("en-US", options);
+    }
 }
 
 // Reset Views Handler
 async function handleResetViews() {
     if (!confirm('Are you sure you want to reset the global view counter to 0?')) return;
     
-    const today = new Date().toISOString().split('T')[0];
-    const newStats = { date: today, count: 0 };
+    let url = SB_URL;
+    let key = SB_KEY;
     
-    // Find or create
-    let analyticsItem = currentPredictions.find(p => p.condition === '__ANALYTICS__');
+     if (!url || !key) {
+        // ... (Local storage fetch if needed, similar to updateAnalytics)
+        const stored = localStorage.getItem(SB_SETTINGS_KEY);
+        if (stored) {
+             const s = JSON.parse(stored);
+             url = s.url;
+             key = s.key;
+        }
+     }
     
-    if (analyticsItem) {
-        analyticsItem.notes = JSON.stringify(newStats);
-        // Also ensure date/temp are valid stub values
-        analyticsItem.date = '2000-01-01';
-        analyticsItem.temperature = '0';
+    if (url && key) {
+        try {
+            const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=eq.__VIEW_LOG__`;
+            await fetch(requestUrl, {
+                method: 'DELETE',
+                headers: {
+                    'apikey': key,
+                    'Authorization': `Bearer ${key}`
+                }
+            });
+            alert('Global counter reset to 0.');
+            updateAnalytics();
+        } catch (e) {
+            alert('Error resetting: ' + e.message);
+        }
     } else {
-        currentPredictions.push({
-            condition: '__ANALYTICS__',
-            notes: JSON.stringify(newStats),
-            date: '2000-01-01',
-            temperature: '0'
-        });
+        alert("Supabase credentials missing.");
     }
-    
-    // Update UI immediately (optimistic)
-    updateAnalytics();
-    
-    // Save
-    savePredictions(currentPredictions);
-    await syncToSupabase(currentPredictions);
-    
-    alert('Global counter reset to 0.');
 }
 
 // Load predictions for admin

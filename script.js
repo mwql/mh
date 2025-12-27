@@ -35,7 +35,8 @@ async function loadPredictions() {
     // 1. Try to fetch from Supabase using global config
     if (SB_URL && SB_KEY) {
         try {
-            const requestUrl = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions?order=date.desc`;
+            // Filter out analytics logs to save bandwidth
+            const requestUrl = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
             
             console.log('Fetching latest forecasts from Supabase...');
             const response = await fetch(requestUrl, {
@@ -82,6 +83,8 @@ async function loadPredictions() {
                     };
                 });
                 
+                // Do not cache config/log items in main list if possible, but logic handles display filtering.
+                // Just save to local storage.
                 localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
                 return normalizedData;
             }
@@ -100,7 +103,8 @@ async function loadPredictions() {
             const url = settings.url;
             const key = settings.key;
             if (url && key) {
-                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?order=date.desc`;
+                // Filter logs here too
+                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
                 const response = await fetch(requestUrl, {
                     headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
                 });
@@ -348,6 +352,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initial load + refresh every 60 seconds
     if (document.getElementById('predictions-list')) {
         loadAndDisplayPredictions();
-        setInterval(loadAndDisplayPredictions, 60000);
+        setInterval(loadAndDisplayPredictions, 10000);
     }
 });

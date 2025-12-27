@@ -17,10 +17,10 @@ function getTodayDate() {
 // Track a page view (Unique per day per device, Synced to DB)
 async function trackPageView() {
     const today = getTodayDate();
-    const visitTokenKey = `sync_v3_token_${today}`;
+    const visitTokenKey = `sync_v5_token_${today}`;
     
-    // 1. Check if already visited today on this device
-    if (localStorage.getItem(visitTokenKey)) {
+    // 1. Check if already visited in this session
+    if (sessionStorage.getItem(visitTokenKey)) {
         console.log('Analytics: Already visited today');
         return; 
     }
@@ -30,56 +30,16 @@ async function trackPageView() {
     try {
         const url = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions`;
         
-        // 2. Fetch existing analytics record
-        const response = await fetch(`${url}?condition=eq.__ANALYTICS__&select=*`, {
-            headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
-        });
-
-        if (!response.ok) throw new Error('Failed to fetch analytics');
-        
-        const data = await response.json();
-        let record = data.length > 0 ? data[0] : null;
-        
-        let views = { date: today, count: 0 };
-        
-        // Parse existing data
-        if (record && record.notes) {
-            try {
-                const storedViews = JSON.parse(record.notes);
-                // If it's the same day, keep the count. If new day, reset (logic handled by just initializing 0 above)
-                if (storedViews.date === today) {
-                    views = storedViews;
-                }
-            } catch (e) {}
-        }
-        
-        // 3. Increment
-        views.count++;
-        views.date = today; // Ensure date is current
-        
+        // INSERT new log record (Safe, no race conditions)
         const payload = {
-            condition: '__ANALYTICS__',
-            notes: JSON.stringify(views),
-            date: '2000-01-01', // Dummy date
-            temperature: '0'     // Dummy temp
+            condition: '__VIEW_LOG__',
+            notes: JSON.stringify({ device: 'visitor', date: today }), // Minimal data
+            date: today,      // Store real date for easy clearing later
+            temperature: '0'  // Dummy
         };
 
-        // 4. Update or Insert
-        let updateUrl = url;
-        let method = 'POST';
-        
-        if (record) {
-            // Update existing using ID if possible (safer), else condition
-            if (record.id) {
-                updateUrl = `${url}?id=eq.${record.id}`;
-            } else {
-                updateUrl = `${url}?condition=eq.__ANALYTICS__`;
-            }
-            method = 'PATCH';
-        }
-        
-        await fetch(updateUrl, {
-            method: method,
+        const response = await fetch(url, {
+            method: 'POST',
             headers: {
                 'apikey': SB_KEY,
                 'Authorization': `Bearer ${SB_KEY}`,
@@ -89,9 +49,13 @@ async function trackPageView() {
             body: JSON.stringify(payload)
         });
         
-        // 5. Mark as visited locally
-        localStorage.setItem(visitTokenKey, 'true');
-        console.log('Analytics: Visit synced successfully');
+        if (response.ok) {
+            // Mark as visited in session
+            sessionStorage.setItem(visitTokenKey, 'true');
+            console.log('Analytics: Logged visit successfully');
+        } else {
+            console.error('Analytics: Log failed', await response.text());
+        }
 
     } catch (error) {
         console.error('Analytics Limit/Error:', error);
