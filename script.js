@@ -25,69 +25,69 @@ async function fetchLiveKuwaitWeather() {
 // ----------------------------------
 // GLOBAL SUPABASE CONFIG (Added for cross-device sync)
 // ----------------------------------
-const SB_URL = 'https://jfmvebvwovibxuxskrcd.supabase.co';
-const SB_KEY = 'sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh';
+// Keys are now loaded from analytics.js
+// window.SB_URL & window.SB_KEY are available globally
 
 // ----------------------------------
 // Fetch predictions from Supabase (fallback to localStorage)
 // ----------------------------------
 async function loadPredictions() {
     // 1. Try to fetch from Supabase using global config
-    if (SB_URL && SB_KEY) {
+    const url = window.SB_URL;
+    const key = window.SB_KEY;
+
+    if (url && key) {
         try {
             // Filter out analytics logs to save bandwidth
-            const requestUrl = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
+            const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
             
             console.log('Fetching latest forecasts from Supabase...');
             const response = await fetch(requestUrl, {
                 headers: { 
-                    'apikey': SB_KEY,
-                    'Authorization': `Bearer ${SB_KEY}`,
+                    'apikey': key,
+                    'Authorization': `Bearer ${key}`,
                     'Cache-Control': 'no-cache'
                 }
             });
             
             if (response.ok) {
                 const data = await response.json();
-                // Map back to the expected local format
-                const normalizedData = data.map(p => {
-                    let uploader = null;
-                    let city = null;
-                    let notes = p.notes;
+                if (Array.isArray(data) && data.length > 0) {
+                    const normalizedData = data.map(p => {
+                        let uploader = null;
+                        let city = null;
+                        let notes = p.notes;
+                        
+                        // Extract tags
+                        if (notes && notes.includes('{{uploader:')) {
+                            const match = notes.match(/{{uploader:(.*?)}}/);
+                            if (match) {
+                                uploader = match[1];
+                                notes = notes.replace(match[0], '').trim();
+                            }
+                        }
+                        if (notes && notes.includes('{{city:')) {
+                            const match = notes.match(/{{city:(.*?)}}/);
+                            if (match) {
+                                city = match[1];
+                                notes = notes.replace(match[0], '').trim();
+                            }
+                        }
+
+                        return {
+                            date: p.date, 
+                            toDate: p.to_date, 
+                            temperature: p.temperature, 
+                            condition: p.condition, 
+                            notes: notes, 
+                            uploader: uploader,
+                            city: city
+                        };
+                    });
                     
-                    // Extract uploader from notes tag {{uploader:NAME}}
-                    if (notes && notes.includes('{{uploader:')) {
-                        const match = notes.match(/{{uploader:(.*?)}}/);
-                        if (match) {
-                            uploader = match[1];
-                            notes = notes.replace(match[0], '').trim();
-                        }
-                    }
-
-                    // Extract city from notes tag {{city:NAME}}
-                    if (notes && notes.includes('{{city:')) {
-                        const match = notes.match(/{{city:(.*?)}}/);
-                        if (match) {
-                            city = match[1];
-                            notes = notes.replace(match[0], '').trim();
-                        }
-                    }
-
-                    return {
-                        date: p.date, 
-                        toDate: p.to_date, 
-                        temperature: p.temperature, 
-                        condition: p.condition, 
-                        notes: notes, 
-                        uploader: uploader,
-                        city: city
-                    };
-                });
-                
-                // Do not cache config/log items in main list if possible, but logic handles display filtering.
-                // Just save to local storage.
-                localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
-                return normalizedData;
+                    localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
+                    return normalizedData;
+                }
             }
         } catch (error) {
             console.error('Error fetching from Supabase:', error);
@@ -115,41 +115,41 @@ async function loadPredictions() {
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    const normalizedData = data.map(p => {
-                        let uploader = null;
-                        let city = null;
-                        let notes = p.notes;
-                        
-                        // Extract uploader from notes tag {{uploader:NAME}}
-                        if (notes && notes.includes('{{uploader:')) {
-                            const match = notes.match(/{{uploader:(.*?)}}/);
-                            if (match) {
-                                uploader = match[1];
-                                notes = notes.replace(match[0], '').trim();
+                    if (Array.isArray(data) && data.length > 0) {
+                        const normalizedData = data.map(p => {
+                            let uploader = null;
+                            let city = null;
+                            let notes = p.notes;
+                            
+                            // Extract tags
+                            if (notes && notes.includes('{{uploader:')) {
+                                const match = notes.match(/{{uploader:(.*?)}}/);
+                                if (match) {
+                                    uploader = match[1];
+                                    notes = notes.replace(match[0], '').trim();
+                                }
                             }
-                        }
-
-                        // Extract city from notes tag {{city:NAME}}
-                        if (notes && notes.includes('{{city:')) {
-                            const match = notes.match(/{{city:(.*?)}}/);
-                            if (match) {
-                                city = match[1];
-                                notes = notes.replace(match[0], '').trim();
+                            if (notes && notes.includes('{{city:')) {
+                                const match = notes.match(/{{city:(.*?)}}/);
+                                if (match) {
+                                    city = match[1];
+                                    notes = notes.replace(match[0], '').trim();
+                                }
                             }
-                        }
 
-                        return {
-                            date: p.date, 
-                            toDate: p.to_date, 
-                            temperature: p.temperature, 
-                            condition: p.condition, 
-                            notes: notes, 
-                            uploader: uploader,
-                            city: city
-                        };
-                    });
-                    localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
-                    return normalizedData;
+                            return {
+                                date: p.date, 
+                                toDate: p.to_date, 
+                                temperature: p.temperature, 
+                                condition: p.condition, 
+                                notes: notes, 
+                                uploader: uploader,
+                                city: city
+                            };
+                        });
+                        localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
+                        return normalizedData;
+                    }
                 }
             }
         } catch (e) {}
@@ -343,7 +343,12 @@ async function displayPredictions(predictions) {
 // ----------------------------------
 // Initialize the app
 // ----------------------------------
-document.addEventListener('DOMContentLoaded', async () => {
+async function initApp() {
+    if (window.appInitialized) return;
+    window.appInitialized = true;
+    
+    console.log("Mahdawi Weather: Initializing...");
+    
     // 1. Display "Today" on both pages immediately
     const inlineDateDisplay = document.getElementById('target-date-inline');
     const targetDateDisplay = document.getElementById('target-date-display');
@@ -355,56 +360,69 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // 2. Load and display predictions
     async function loadAndDisplayPredictions() {
-        const predictions = await loadPredictions();
-        
-        // Update "I Think" message from config record
-        const iThinkConfig = predictions.find(p => p.condition === '__ITHINK__');
-        if (iThinkConfig) {
-            const iThinkElement = document.getElementById('i-think-text');
-            if (iThinkElement) iThinkElement.textContent = iThinkConfig.notes;
-        }
-
-        // Update Header Image
-        const headerImgConfig = predictions.find(p => p.condition === '__HEADER_IMAGE__');
-        const headerImg = document.querySelector('.header-panel img');
-        if (headerImg) {
-            if (headerImgConfig && headerImgConfig.notes) {
-                headerImg.src = headerImgConfig.notes;
-                // Add minor styling to ensure it fits well
-                headerImg.style.borderRadius = "12px";
-                headerImg.style.objectFit = "cover";
-            } else {
-                headerImg.src = 'img/Mahdawi_Weather.png';
+        try {
+            const predictions = await loadPredictions();
+            
+            if (!predictions || predictions.length === 0) {
+                console.warn("No predictions found to display.");
+                displayPredictions([]);
+                return;
             }
-        }
 
-        // Apply Theme
-        const themeConfig = predictions.find(p => p.condition === '__THEME_CONFIG__');
-        if (themeConfig && themeConfig.notes) {
-            try {
-                const theme = JSON.parse(themeConfig.notes);
-                const r = document.documentElement;
-                
-                // Helper to apply if exists
-                if(theme.bg) r.style.setProperty('--bg-color', theme.bg);
-                if(theme.text) r.style.setProperty('--text-color', theme.text);
-                if(theme.primary) r.style.setProperty('--primary-color', theme.primary);
-                if(theme.accent) r.style.setProperty('--accent-color', theme.accent);
-                if(theme.cardBg) r.style.setProperty('--card-bg', theme.cardBg);
-                if(theme.cardBorder) r.style.setProperty('--card-border', theme.cardBorder);
-                if(theme.glassBg) r.style.setProperty('--glass-bg', theme.glassBg);
-                if(theme.glassBorder) r.style.setProperty('--glass-border', theme.glassBorder);
-            } catch(e) {
-                console.error("Error applying theme", e);
+            // Update "I Think" message
+            const iThinkConfig = predictions.find(p => p.condition === '__ITHINK__');
+            if (iThinkConfig) {
+                const iThinkElement = document.getElementById('i-think-text');
+                if (iThinkElement) iThinkElement.textContent = iThinkConfig.notes;
             }
-        }
 
-        displayPredictions(predictions);
+            // Update Header Image
+            const headerImgConfig = predictions.find(p => p.condition === '__HEADER_IMAGE__');
+            const headerImg = document.querySelector('.header-panel img');
+            if (headerImg) {
+                if (headerImgConfig && headerImgConfig.notes) {
+                    headerImg.src = headerImgConfig.notes;
+                    headerImg.style.borderRadius = "12px";
+                    headerImg.style.objectFit = "cover";
+                } else {
+                    headerImg.src = 'img/Mahdawi_Weather.png';
+                }
+            }
+
+            // Apply Theme
+            const themeConfig = predictions.find(p => p.condition === '__THEME_CONFIG__');
+            if (themeConfig && themeConfig.notes) {
+                try {
+                    const theme = JSON.parse(themeConfig.notes);
+                    const r = document.documentElement;
+                    if(theme.bg) r.style.setProperty('--bg-color', theme.bg);
+                    if(theme.text) r.style.setProperty('--text-color', theme.text);
+                    if(theme.primary) r.style.setProperty('--primary-color', theme.primary);
+                    if(theme.accent) r.style.setProperty('--accent-color', theme.accent);
+                    if(theme.cardBg) r.style.setProperty('--card-bg', theme.cardBg);
+                    if(theme.cardBorder) r.style.setProperty('--card-border', theme.cardBorder);
+                    if(theme.glassBg) r.style.setProperty('--glass-bg', theme.glassBg);
+                    if(theme.glassBorder) r.style.setProperty('--glass-border', theme.glassBorder);
+                } catch(e) {}
+            }
+
+            displayPredictions(predictions);
+        } catch (err) {
+            console.error("Error in loadAndDisplayPredictions:", err);
+        }
     }
     
-    // Initial load + refresh every 60 seconds
+    // Initial load + refresh every 10 seconds if on main list page
     if (document.getElementById('predictions-list')) {
-        loadAndDisplayPredictions();
+        await loadAndDisplayPredictions();
         setInterval(loadAndDisplayPredictions, 10000);
     }
-});
+}
+
+// Start as early as possible
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    initApp();
+} else {
+    document.addEventListener('DOMContentLoaded', initApp);
+    window.addEventListener('load', initApp); // Fallback
+}

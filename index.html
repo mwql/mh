@@ -92,12 +92,12 @@
 
         <section class="section-panel date-display">
             <p>Target Date:</p>
-            <h2 id="target-date-display">From 2025-12-5 to 2025-12-25</h2>
+            <h2 id="target-date-display">...</h2>
         </section>
 
         <section class="section-panel custom-section">
             <h3>i think</h3>
-            <p id="i-think-text"></p>
+            <p id="i-think-text">...</p>
         </section>
 
         <section class="section-panel predictions-list-section">
@@ -110,40 +110,48 @@
         
         <h6 style="text-align: center; color:var(--text-muted); font-size: 0.75rem; margin-top: 10px; margin-bottom: 20px;">كل التوقعات الجوية صادرة من محللين خبراء بالمجال</h6>
 
-        <footer class="section-panel" style="text-align: center; display: flex; justify-content: center; gap: 20px;">
-            <a href="other.html" class="link-secondary">See what others are saying &rarr;</a>
-            <a href="admin.html" class="link-secondary" style="opacity: 0.5;">Admin Access &rarr;</a>
+        <footer class="section-panel" style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 15px;">
+            <div style="display: flex; justify-content: center; gap: 20px; width: 100%;">
+                <a href="other.html" class="link-secondary">See what others are saying &rarr;</a>
+                <a href="admin.html" class="link-secondary" style="opacity: 0.5;">Admin Access &rarr;</a>
+            </div>
+            <p id="site-version" style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.4; margin: 0;">v11.0 (Local-First)</p>
         </footer>
     </div>
 
-    <script src="analytics.js?v=3.0"></script>
-    <script type="module" src="script.js?v=3.0"></script>
+    <!-- Gemini Chatbot UI -->
+    <div id="chatbot-button" onclick="toggleChatbot()">
+        <svg viewBox="0 0 24 24">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.821.487 3.53 1.338 5L2 22l5-1.338c1.47.851 3.179 1.338 5 1.338 5.523 0 10-4.477 10-10S17.523 2 12 2zm0 18c-1.477 0-2.854-.396-4.04-1.083l-2.657.711.711-2.657A7.957 7.957 0 014 12c0-4.411 3.589-8 8-8s8 3.589 8 8-3.589 8-8 8z"/>
+        </svg>
+    </div>
+
+    <div id="chatbot-window">
+        <div class="chat-header">
+            <h3>
+                <span class="ai-icon">✨</span>
+                Mahdawi AI
+            </h3>
+            <button class="close-btn" onclick="toggleChatbot()">&times;</button>
+        </div>
+        <div id="chat-messages">
+            <div class="message ai">Hello! I'm Mahdawi AI. Ask me anything about the weather forecasts!</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="if(event.key === 'Enter') sendChatMessage()">
+            <button id="send-chat" onclick="sendChatMessage()">
+                <svg viewBox="0 0 24 24">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <script src="analytics.js"></script>
+    <script src="script.js"></script>
+    <script src="chatbot.js"></script>
+    <script>
+        // Init happens in script.js now
+    </script>
 </body>
-
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -2,8 +2,8 @@
 // PAGE VIEW ANALYTICS (Synced)
 // =============================
 
-const SB_URL = 'https://jfmvebvwovibxuxskrcd.supabase.co';
-const SB_KEY = 'sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh';
+window.SB_URL = 'https://jfmvebvwovibxuxskrcd.supabase.co';
+window.SB_KEY = 'sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh';
 
 // Get today's date in YYYY-MM-DD format
 function getTodayDate() {

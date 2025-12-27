@@ -2,7 +2,7 @@
 // ADMIN PAGE FUNCTIONALITY
 // =============================
 
-const ADMIN_PASSWORD = "0102"; // Password: 0102
+const ADMIN_PASSWORD = "2"; // Password: 0102
 const USER_PASSWORD = "11"; // Password: 11
 const PREDICTIONS_STORAGE_KEY = "weatherPredictions";
 const ITHINK_STORAGE_KEY = "ithinkMessage";
@@ -66,39 +66,68 @@ function loadSupabaseSettings() {
       console.error("Admin: Error loading Supabase settings", e);
     }
   }
+
+  // Load Gemini Key from localStorage or use default
+  const geminiInput = document.getElementById("gemini-key");
+  if (geminiInput) {
+    const storedGemini = localStorage.getItem("geminiAIKey") || "AIzaSyC2yBUSJolXFpCVzPbM2f0yuhIFApaonOA";
+    geminiInput.value = storedGemini;
+  }
 }
 
 // Save Supabase settings to localStorage
-function saveSupabaseSettings() {
+async function saveSupabaseSettings() {
   console.log("Admin: saveSupabaseSettings triggered");
   const urlInput = document.getElementById("sb-url");
   const keyInput = document.getElementById("sb-key");
+  const geminiInput = document.getElementById("gemini-key");
 
-  if (!urlInput || !keyInput) {
+  if (!urlInput || !keyInput || !geminiInput) {
     alert("Error: UI elements not found. Please refresh the page.");
     return;
   }
 
   const url = urlInput.value.trim();
   const key = keyInput.value.trim();
+  const geminiKey = geminiInput.value.trim();
 
   if (!url || !key) {
     alert("Please fill in both the Supabase URL and the Anon Key");
     return;
   }
 
+  // 1. Save Supabase settings to localStorage
   const settings = { url, key };
   localStorage.setItem(SB_SETTINGS_KEY, JSON.stringify(settings));
+
+  // 2. Save Gemini Key to localStorage and Predictions array (for sync)
+  localStorage.setItem("geminiAIKey", geminiKey);
+  
+  if (geminiKey) {
+    let geminiConfig = currentPredictions.find(p => p.condition === '__GEMINI_CONFIG__');
+    if (geminiConfig) {
+      geminiConfig.notes = geminiKey;
+    } else {
+      currentPredictions.push({
+        date: '2000-01-01',
+        temperature: '0',
+        condition: '__GEMINI_CONFIG__',
+        notes: geminiKey
+      });
+    }
+    // Sync all predictions to include the new config
+    await syncToSupabase(currentPredictions);
+  }
 
   // Visual feedback
   const status = document.getElementById("sb-status");
   if (status) {
-    status.textContent = "✅ Settings Saved Successfully!";
+    status.textContent = "✅ Settings & Gemini Key Saved Successfully!";
     status.style.color = "#10b981";
     status.style.display = "block";
     status.style.border = "1px solid #10b981";
 
-    console.log("Admin: Supabase settings saved to localStorage");
+    console.log("Admin: Settings saved and synced");
 
     // Hide status after 4 seconds
     setTimeout(() => {
@@ -110,9 +139,9 @@ function saveSupabaseSettings() {
 }
 
 // Toggle Key Visibility
-function toggleKeyVisibility() {
-  const keyInput = document.getElementById("sb-key");
-  const toggleBtn = document.getElementById("toggle-key");
+function toggleKeyVisibility(inputId = "sb-key", btnId = "toggle-key") {
+  const keyInput = document.getElementById(inputId);
+  const toggleBtn = document.getElementById(btnId);
   if (keyInput.type === "password") {
     keyInput.type = "text";
     toggleBtn.textContent = "Hide";

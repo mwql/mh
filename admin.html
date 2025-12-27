@@ -382,7 +382,14 @@
                         <label>Supabase Anon Key</label>
                         <div style="position: relative; display: flex; align-items: center;">
                             <input type="password" id="sb-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." style="padding-right: 60px;">
-                            <button type="button" id="toggle-key" style="position: absolute; right: 5px; padding: 4px 8px; font-size: 0.75rem; background: #444; height: 32px; width: auto; margin-top: 0;" onclick="toggleKeyVisibility()">Show</button>
+                            <button type="button" id="toggle-key" style="position: absolute; right: 5px; padding: 4px 8px; font-size: 0.75rem; background: #444; height: 32px; width: auto; margin-top: 0;" onclick="toggleKeyVisibility('sb-key', 'toggle-key')">Show</button>
+                        </div>
+                    </div>
+                    <div class="form-group full-width">
+                        <label>Gemini AI API Key</label>
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <input type="password" id="gemini-key" placeholder="AIzaSy..." style="padding-right: 60px;">
+                            <button type="button" id="toggle-gemini-key" style="position: absolute; right: 5px; padding: 4px 8px; font-size: 0.75rem; background: #444; height: 32px; width: auto; margin-top: 0;" onclick="toggleKeyVisibility('gemini-key', 'toggle-gemini-key')">Show</button>
                         </div>
                     </div>
                 </div>
