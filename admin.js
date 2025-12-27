@@ -35,8 +35,10 @@ window.deletePrediction = deletePrediction;
 window.saveIThinkMessage = saveIThinkMessage;
 window.saveTargetDate = saveTargetDate;
 window.handleHeaderImageSelect = handleHeaderImageSelect;
-window.saveHeaderImage = saveHeaderImage;
-window.removeHeaderImage = removeHeaderImage;
+window.uploadHeaderAsset = uploadHeaderAsset;
+window.activateHeaderAsset = activateHeaderAsset;
+window.removeActiveHeader = removeActiveHeader;
+window.deleteHeaderAsset = deleteHeaderAsset;
 window.testApiConnection = testApiConnection;
 window.addExternalApi = addExternalApi;
 window.removeApi = removeApi;
@@ -291,13 +293,14 @@ async function initializePredictions() {
       const requestUrl = `${url.replace(
         /\/$/,
         ""
-      )}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
+      )}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
 
       console.log("Admin: Fetching from Supabase...");
       const response = await fetch(requestUrl, {
         headers: {
           apikey: key,
           Authorization: `Bearer ${key}`,
+          "Cache-Control": "no-cache"
         },
       });
 
@@ -455,6 +458,29 @@ async function loadIThinkMessage() {
     }
 }
 
+// Save "I Think" message
+async function saveIThinkMessage() {
+    const textarea = document.getElementById('ithink-message');
+    const message = textarea.value;
+    
+    // Find or create config item
+    let configItem = currentPredictions.find(p => p.condition === '__ITHINK__');
+    if (configItem) {
+        configItem.notes = message;
+    } else {
+        currentPredictions.push({
+            date: '2000-01-01',
+            temperature: '0',
+            condition: '__ITHINK__',
+            notes: message
+        });
+    }
+    
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    alert('Message updated successfully!');
+}
+
 // Load Target Date
 async function loadTargetDate() {
     const configItem = currentPredictions.find(p => p.condition === '__TARGET_DATE__');
@@ -492,11 +518,17 @@ async function saveTargetDate() {
 }
 
 // ========================
-// HEADER IMAGE LOGIC
+// HEADER LIBRARY LOGIC
 // ========================
 async function handleHeaderImageSelect(event) {
     const file = event.target.files[0];
-    if (!file) return;
+    const fileChosenText = document.getElementById('file-chosen-text');
+    if (!file) {
+        if(fileChosenText) fileChosenText.textContent = "No file chosen";
+        return;
+    }
+    
+    if(fileChosenText) fileChosenText.textContent = file.name;
     
     // Compress/Resize logic
     const reader = new FileReader();
@@ -537,57 +569,148 @@ async function handleHeaderImageSelect(event) {
     }
 }
 
-async function saveHeaderImage() {
+// 1. Upload to Library
+async function uploadHeaderAsset() {
     if (!pendingHeaderImageBase64) {
         alert('Please select an image first!');
         return;
     }
     
-    // Find or create
-    let configItem = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
-    if(configItem) {
-        configItem.notes = pendingHeaderImageBase64;
+    // Add new asset record
+    currentPredictions.push({
+         date: new Date().toISOString().split('T')[0],
+         temperature: '0', 
+         condition: '__HEADER_ASSET__',
+         notes: pendingHeaderImageBase64
+    });
+    
+    // Reset Input UI
+    pendingHeaderImageBase64 = null;
+    document.getElementById('header-file-input').value = '';
+    document.getElementById('header-preview-container').style.display = 'none';
+    
+    savePredictions(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    
+    loadHeaderLibrary(); // Refresh UI
+    alert('Image added to library!');
+}
+
+// 2. Activate an Asset
+async function activateHeaderAsset(indexInLibrary) {
+    // Re-find assets to get correct data
+    const assets = currentPredictions.filter(p => p.condition === '__HEADER_ASSET__');
+    const asset = assets[indexInLibrary]; // index matches rendered list
+    
+    if (!asset) return;
+
+    // Find or create Active Record
+    let activeRecord = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
+    if(activeRecord) {
+        activeRecord.notes = asset.notes;
     } else {
         currentPredictions.push({
              date: '2000-01-01',
              temperature: '0', 
              condition: '__HEADER_IMAGE__',
-             notes: pendingHeaderImageBase64
+             notes: asset.notes
         });
     }
-    
+
     savePredictions(currentPredictions);
     await syncToSupabase(currentPredictions);
-    alert('Header Image saved successfully! It will appear on the site shortly.');
+    loadHeaderLibrary(); // Refresh UI
+    alert('Header updated successfully!');
 }
 
-async function removeHeaderImage() {
-    if(!confirm('Return to default logo?')) return;
+// 3. Remove Active Header
+async function removeActiveHeader() {
+    if(!confirm('Revert to default logo?')) return;
     
-    // Remove from array
+    const initialLength = currentPredictions.length;
     currentPredictions = currentPredictions.filter(p => p.condition !== '__HEADER_IMAGE__');
     
-    // Reset UI
-    pendingHeaderImageBase64 = null;
-    const previewContainer = document.getElementById('header-preview-container');
-    const fileInput = document.getElementById('header-file-input');
-    if(previewContainer) previewContainer.style.display = 'none';
-    if(fileInput) fileInput.value = '';
-    
+    if (currentPredictions.length === initialLength) {
+        alert("No active custom header found to remove.");
+        return;
+    }
+
     savePredictions(currentPredictions);
     await syncToSupabase(currentPredictions);
-    alert('Custom header removed. Reverted to default.');
+    loadHeaderLibrary();
+    alert("Reverted to default logo.");
 }
 
-async function loadHeaderImage() {
-    const configItem = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
-    if (configItem && configItem.notes) {
-        const preview = document.getElementById('header-preview');
-        const previewContainer = document.getElementById('header-preview-container');
-        if (preview && previewContainer) {
-            preview.src = configItem.notes;
-            previewContainer.style.display = 'block';
+// 4. Delete Asset
+async function deleteHeaderAsset(indexInLibrary) {
+    if(!confirm('Delete this image from library?')) return;
+
+    // We need to find the EXACT record in the main array.
+    // 1. Re-derive the filtered list exactly as the UI did
+    const assets = currentPredictions.filter(p => p.condition === '__HEADER_ASSET__');
+    const targetAsset = assets[indexInLibrary];
+    
+    if (targetAsset) {
+        // 2. Remove by Excluding this specific object reference
+        // This is robust against index shifting as long as reference holds
+        const originalCount = currentPredictions.length;
+        currentPredictions = currentPredictions.filter(p => p !== targetAsset);
+        
+        if (currentPredictions.length < originalCount) {
+             savePredictions(currentPredictions);
+             await syncToSupabase(currentPredictions);
+             loadHeaderLibrary();
+             // alert('Asset deleted.'); // Optional: reduce spam if obvious
+        } else {
+            alert("Error: Could not remove asset from memory.");
         }
+    } else {
+        alert("Error: Asset not found at index " + indexInLibrary);
+    }
+}
+
+// 5. Load & Render Library
+async function loadHeaderLibrary() {
+    const activeHeader = currentPredictions.find(p => p.condition === '__HEADER_IMAGE__');
+    const assets = currentPredictions.filter(p => p.condition === '__HEADER_ASSET__');
+    
+    // Render Active
+    const activeContainer = document.getElementById('active-header-display');
+    const removeBtn = document.getElementById('btn-remove-active');
+    
+    if (activeHeader && activeHeader.notes) {
+        activeContainer.innerHTML = `<img src="${activeHeader.notes}" style="max-height: 100px; max-width: 100%; border-radius: 8px;">`;
+        if(removeBtn) removeBtn.style.display = 'inline-block';
+    } else {
+        activeContainer.innerHTML = `<p style="color: var(--text-muted); font-size: 0.85rem;">Using Default Logo</p>`;
+        if(removeBtn) removeBtn.style.display = 'none';
+    }
+
+    // Render Grid
+    const grid = document.getElementById('header-library-grid');
+    grid.innerHTML = '';
+    
+    if (assets.length === 0) {
+        grid.innerHTML = `<p style="color: var(--text-muted); font-size: 0.8rem; grid-column: 1/-1; text-align: center;">Library is empty.</p>`;
+    } else {
+        assets.forEach((asset, index) => {
+            const item = document.createElement('div');
+            item.style.cssText = 'position: relative; aspect-ratio: 1; background: #222; border-radius: 8px; overflow: hidden; border: 1px solid var(--border-color);';
+            
+            // Check if this asset is the currently active one (simple string comparison)
+            const isActive = activeHeader && activeHeader.notes === asset.notes;
+            const borderStyle = isActive ? 'border: 2px solid #10b981;' : '';
+            if(isActive) item.style.border = '2px solid #10b981';
+
+            item.innerHTML = `
+                <img src="${asset.notes}" style="width: 100%; height: 100%; object-fit: cover;">
+                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: space-between; padding: 5px; z-index: 10;">
+                    <button onclick="activateHeaderAsset(${index})" title="Use This" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">✅</button>
+                    <button onclick="deleteHeaderAsset(${index})" title="Delete" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">🗑️</button>
+                </div>
+            `;
+            grid.appendChild(item);
+        });
     }
 }
 
@@ -597,7 +720,8 @@ async function loadAdminData() {
     await loadPredictionsForAdmin();
     await loadIThinkMessage();
     await loadTargetDate();
-    await loadHeaderImage();
+    // await loadHeaderImage(); // Replaced
+    loadHeaderLibrary(); // New loader
     loadApis();
     updateAnalytics();
     setInterval(updateAnalytics, 2000);
@@ -940,7 +1064,7 @@ function displayPredictionsInAdmin(predictions) {
 
   predictions.forEach((pred, index) => {
     // Skip config items
-    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__' || pred.condition === '__TARGET_DATE__' || pred.condition === '__HEADER_IMAGE__') return;
+    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__' || pred.condition === '__TARGET_DATE__' || pred.condition === '__HEADER_IMAGE__' || pred.condition === '__HEADER_ASSET__') return;
 
     const card = document.createElement("div");
     card.className = "admin-prediction-card";

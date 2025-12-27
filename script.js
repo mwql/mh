@@ -36,13 +36,14 @@ async function loadPredictions() {
     if (SB_URL && SB_KEY) {
         try {
             // Filter out analytics logs to save bandwidth
-            const requestUrl = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
+            const requestUrl = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
             
             console.log('Fetching latest forecasts from Supabase...');
             const response = await fetch(requestUrl, {
                 headers: { 
                     'apikey': SB_KEY,
-                    'Authorization': `Bearer ${SB_KEY}`
+                    'Authorization': `Bearer ${SB_KEY}`,
+                    'Cache-Control': 'no-cache'
                 }
             });
             
@@ -104,9 +105,13 @@ async function loadPredictions() {
             const key = settings.key;
             if (url && key) {
                 // Filter logs here too
-                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
+                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
                 const response = await fetch(requestUrl, {
-                    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+                    headers: { 
+                        'apikey': key, 
+                        'Authorization': `Bearer ${key}`,
+                        'Cache-Control': 'no-cache'
+                    }
                 });
                 if (response.ok) {
                     const data = await response.json();
@@ -183,7 +188,7 @@ async function displayPredictions(predictions) {
     // Filter out config items (Robust check)
     const actualForecasts = predictions.filter(p => {
         const cond = (p.condition || '').trim();
-        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__';
+        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__' && cond !== '__HEADER_ASSET__';
     });
 
     // -----------------------------

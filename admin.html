@@ -457,27 +457,51 @@
                 <button class="btn-primary" onclick="saveTargetDate()">Update Date</button>
             </div>
 
-            <!-- Header Image Settings -->
+            <!-- Header Image Library -->
             <div class="section" id="section-header-image">
-                <h2>🖼️ Header Image Settings</h2>
-                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 15px;">
-                    Upload a custom image to replace the main logo. (Max 1MB, Auto-resized)
+                <h2>🖼️ Header Library</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 20px;">
+                    Manage your header images. Upload to Library, then select one to Activate.
                 </p>
+
+                <!-- Active Header -->
+                <div style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 15px; border-radius: 12px; margin-bottom: 24px; text-align: center;">
+                    <h3 style="color: #10b981; font-size: 0.9rem; margin-bottom: 10px; text-transform: uppercase;">Currently Active</h3>
+                    <div id="active-header-display">
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Using Default Logo</p>
+                    </div>
+                    <button id="btn-remove-active" onclick="removeActiveHeader()" style="margin-top: 10px; background: rgba(239, 68, 68, 0.2); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.2); font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; display: none;">
+                        Revert to Default
+                    </button>
+                </div>
+
+                <!-- Upload New Asset -->
                 <div class="form-grid">
                     <div class="form-group full-width">
-                        <label>Select Image</label>
-                        <input type="file" id="header-file-input" accept="image/*" onchange="handleHeaderImageSelect(event)">
+                        <label>Upload New Image to Library</label>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <input type="file" id="header-file-input" accept="image/*" onchange="handleHeaderImageSelect(event)" style="display: none;">
+                            <label for="header-file-input" class="btn-primary" style="display: inline-block; cursor: pointer; text-align: center; margin: 0; width: auto; flex: 0 0 auto;">
+                                📁 Choose Image
+                            </label>
+                            <span id="file-chosen-text" style="color: var(--text-muted); font-size: 0.9rem;">No file chosen</span>
+                        </div>
                     </div>
                 </div>
                 
-                <div id="header-preview-container" style="display: none; margin-bottom: 20px; text-align: center;">
+                <div id="header-preview-container" style="display: none; margin-bottom: 15px; text-align: center; margin-top: 15px;">
                     <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 5px;">Preview:</p>
-                    <img id="header-preview" src="" style="max-width: 100%; max-height: 200px; border-radius: 12px; border: 1px solid var(--border-color);">
+                    <img id="header-preview" src="" style="max-width: 100%; max-height: 200px; border-radius: 12px; border: 1px solid var(--border-color); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    <div style="margin-top: 15px;">
+                        <button class="btn-primary" onclick="uploadHeaderAsset()" style="background: #10b981;">Save to Library</button>
+                    </div>
                 </div>
 
-                <div class="form-actions" style="display: flex; gap: 10px;">
-                    <button class="btn-primary" style="flex: 1;" onclick="saveHeaderImage()">Save Image</button>
-                    <button class="btn-secondary" style="flex: 1; background: rgba(239, 68, 68, 0.2); color: #ef4444; border-color: rgba(239, 68, 68, 0.2);" onclick="removeHeaderImage()">Remove Custom</button>
+                <!-- Library Grid -->
+                <h3 style="color: white; font-size: 1rem; margin-bottom: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">📚 Library</h3>
+                <div id="header-library-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 15px;">
+                    <!-- Assets injected here -->
+                    <p style="color: var(--text-muted); font-size: 0.8rem; grid-column: 1/-1; text-align: center;">Library is empty.</p>
                 </div>
             </div>
 
