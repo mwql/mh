@@ -52,8 +52,8 @@ function loadSupabaseSettings() {
   console.log("Admin: loadSupabaseSettings called");
 
   // Fill with global config first if available
-  if (SB_URL) document.getElementById("sb-url").value = SB_URL;
-  if (SB_KEY) document.getElementById("sb-key").value = SB_KEY;
+  if (window.SB_URL) document.getElementById("sb-url").value = window.SB_URL;
+  if (window.SB_KEY) document.getElementById("sb-key").value = window.SB_KEY;
 
   const stored = localStorage.getItem(SB_SETTINGS_KEY);
   if (stored) {
@@ -204,8 +204,8 @@ async function testSupabaseConnection() {
 // Sync predictions to Supabase
 async function syncToSupabase(predictions) {
   // 1. Get credentials (Global first, then LocalStorage)
-  let url = SB_URL;
-  let key = SB_KEY;
+  let url = window.SB_URL;
+  let key = window.SB_KEY;
 
   if (!url || !key) {
     const stored = localStorage.getItem(SB_SETTINGS_KEY);
@@ -306,8 +306,8 @@ async function initializePredictions() {
   console.log("Admin: Initializing predictions...");
 
   // 1. Try to fetch from Supabase (Global first, then LocalStorage)
-  let url = SB_URL;
-  let key = SB_KEY;
+  let url = window.SB_URL;
+  let key = window.SB_KEY;
 
   if (!url || !key) {
     const sbStored = localStorage.getItem(SB_SETTINGS_KEY);
