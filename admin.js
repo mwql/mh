@@ -190,7 +190,7 @@ async function syncToSupabase(predictions) {
     if (lastStatus) lastStatus.textContent = "⏳ Syncing...";
 
     // 1. Delete all existing records (PostgREST style)
-    const deleteResponse = await fetch(`${requestUrl}?id=gt.0`, {
+    const deleteResponse = await fetch(`${requestUrl}?condition=neq.__VIEW_LOG__`, {
       method: "DELETE",
       headers: {
         apikey: key,
@@ -286,7 +286,7 @@ async function initializePredictions() {
       const requestUrl = `${url.replace(
         /\/$/,
         ""
-      )}/rest/v1/predictions?order=date.desc`;
+      )}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc`;
 
       console.log("Admin: Fetching from Supabase...");
       const response = await fetch(requestUrl, {
@@ -789,7 +789,7 @@ function displayPredictionsInAdmin(predictions) {
 
   predictions.forEach((pred, index) => {
     // Skip config items
-    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__') return;
+    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__') return;
 
     const card = document.createElement("div");
     card.className = "admin-prediction-card";
