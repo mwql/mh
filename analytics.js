@@ -4,30 +4,32 @@
 
 // IMPORTANT: Supabase credentials are now loaded from settings
 // Do NOT hardcode keys here - they should be set in admin panel
-window.SB_URL = null;
-window.SB_KEY = null;
+// Hardcoded credentials as requested
+window.SB_URL = "https://jfmvebvwovibxuxskrcd.supabase.co";
+window.SB_KEY = "sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh";
 
-// Load Supabase credentials from localStorage settings
+// Load Supabase credentials from localStorage settings or use hardcoded defaults
 function loadSupabaseCredentials() {
+    // 1. Check LocalStorage (User overrides)
     try {
         const stored = localStorage.getItem('supabaseSyncSettings');
         if (stored) {
             const settings = JSON.parse(stored);
             if (settings.url && settings.key) {
-                // Basic validation
-                if (settings.url.includes('supabase.co') && settings.key.startsWith('eyJ')) {
-                    window.SB_URL = settings.url;
-                    window.SB_KEY = settings.key;
-                    return true;
-                } else {
-                    console.warn('Analytics: Invalid Supabase credentials format');
-                    return false;
-                }
+                 window.SB_URL = settings.url;
+                 window.SB_KEY = settings.key;
+                 return true;
             }
         }
     } catch (e) {
-        console.error('Analytics: Error loading credentials', e);
+        console.error('Analytics: Error loading settings', e);
     }
+
+    // 2. Check defaults (Hardcoded)
+    if (window.SB_URL && window.SB_KEY) {
+        return true;
+    }
+
     return false;
 }
 
