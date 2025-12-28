@@ -60,7 +60,10 @@ export async function hashPassword(password) {
 }
 
 export const ADMIN_PASSWORD_HASH =
-  "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"; // Hash of '2' - Fixed length to 64 chars
+  "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"; // Hash of '2'
+
+export const USER_PASSWORD_HASH = 
+  "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8"; // Hash of '11'
 
 // ==========================================
 // ⚠️ PUBLIC HOSTING CONFIGURATION (GitHub Pages)
