@@ -74,23 +74,40 @@ window.resetThemeSettings = resetThemeSettings;
 function loadSupabaseSettings() {
   console.log("Admin: loadSupabaseSettings called");
 
-  // Fill with global config first if available
-  if (window.SB_URL) document.getElementById("sb-url").value = window.SB_URL;
-  if (window.SB_KEY) document.getElementById("sb-key").value = window.SB_KEY;
+  const urlInput = document.getElementById("sb-url");
+  const keyInput = document.getElementById("sb-key");
 
+  // Hardcoded Defaults (Requested by User)
+  const DEFAULT_URL = "https://jfmvebvwovibxuxskrcd.supabase.co";
+  const DEFAULT_KEY = "sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh";
+
+  // 1. Start with Defaults
+  if (urlInput) urlInput.value = window.SB_URL || DEFAULT_URL;
+  if (keyInput) keyInput.value = window.SB_KEY || DEFAULT_KEY;
+
+  // 2. Check LocalStorage for Overrides
   const stored = localStorage.getItem(SB_SETTINGS_KEY);
   if (stored) {
     try {
       const settings = JSON.parse(stored);
-      if (settings.url) document.getElementById("sb-url").value = settings.url;
-      if (settings.key) document.getElementById("sb-key").value = settings.key;
-      console.log("Admin: Supabase settings loaded (LocalStorage Override)");
+      // Only overwrite if the stored value is DIFFERENT and VALID (not empty)
+      if (settings.url && settings.url.trim() !== "") {
+          urlInput.value = settings.url;
+      }
+      if (settings.key && settings.key.trim() !== "") {
+          keyInput.value = settings.key;
+      }
+      console.log("Admin: Supabase settings loaded (LocalStorage checked)");
     } catch (e) {
       console.error("Admin: Error loading Supabase settings", e);
     }
   }
+  
+  // 3. Consistency Check (Force global sync)
+  window.SB_URL = urlInput.value;
+  window.SB_KEY = keyInput.value;
 
-  // Load Gemini Key from localStorage or use default
+  // Load Gemini Key
   const geminiInput = document.getElementById("gemini-key");
   if (geminiInput) {
     const storedGemini =
