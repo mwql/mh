@@ -252,18 +252,19 @@ async function syncToSupabase(predictions) {
   }
 
   // Validate credentials format (Relaxed check)
-  // Allow custom domains, so just check for valid URL format
+  // Allow custom domains and any key format (let the API decide if it's valid)
   const isUrlValid = url.startsWith('http'); 
-  const isKeyValid = key.startsWith('eyJ') && key.length > 20;
+  const isKeyValid = key.length > 20; // Just check length
 
   if (!isUrlValid || !isKeyValid) {
-    console.error("Admin: Invalid credentials format", { url: isUrlValid, key: isKeyValid });
     if (!isUrlValid) {
         showSyncStatus("⚠️ Invalid URL. Must start with https://", "error");
-    } else {
-        showSyncStatus("⚠️ Invalid Key. Must start with 'eyJ'", "error");
+        return false;
     }
-    return false;
+    if (!isKeyValid) {
+        showSyncStatus("⚠️ Invalid Key. Too short/empty.", "error");
+        return false;
+    }
   }
 
   const requestUrl = `${url.replace(/\/$/, "")}/rest/v1/predictions`;
