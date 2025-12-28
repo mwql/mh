@@ -6,10 +6,10 @@
 const DEBUG = false;
 
 // PASSWORD HASHES (using SHA-256)
-// Admin password: "Mahdi@2024" 
-const ADMIN_PASSWORD_HASH = "793d6cc2e93c2f6e8a2c8f5e5c0d8c7d9e4f3a2b1c8d9e5f3a2b1c8d9e5f3a2b";
-// User password: "user2024"
-const USER_PASSWORD_HASH = "7c4a8d09ca3762af61e59520943dc26494f8941b04aa18e9a81b14f1c0e7f4e0";
+// Admin password: "2"
+const ADMIN_PASSWORD_HASH = "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35";
+// User password: "11"
+const USER_PASSWORD_HASH = "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8";
 
 const PREDICTIONS_STORAGE_KEY = "weatherPredictions";
 const ITHINK_STORAGE_KEY = "ithinkMessage";
