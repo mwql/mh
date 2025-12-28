@@ -12,7 +12,10 @@ export const CONFIG_TYPES = {
     HEADER_IMAGE: '__HEADER_IMAGE__',
     HEADER_ASSET: '__HEADER_ASSET__',
     THEME_CONFIG: '__THEME_CONFIG__',
-    GEMINI_CONFIG: '__GEMINI_CONFIG__'
+    THEME_CONFIG: '__THEME_CONFIG__',
+    GEMINI_CONFIG: '__GEMINI_CONFIG__',
+    // Public Config for Visitors (GitHub Pages)
+    PUBLIC_SUPABASE: '__PUBLIC_SUPABASE__'
 };
 
 // Check if a prediction is a config item
@@ -56,12 +59,21 @@ export async function hashPassword(password) {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Password validation (hashed comparisons)
-export const ADMIN_PASSWORD_HASH = '2a5d81942b8c8c72e8c44b2e0e1e3e6f5f3c8db5d8c5a2e7c8d5f3c8d5f3c8d5'; // Hash of 'admin2024'
-export const USER_PASSWORD_HASH = '7c4a8d09ca3762af61e59520943dc26494f8941b'; // Hash of 'user2024'
+export const ADMIN_PASSWORD_HASH = 'd4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35'; // Hash of '2' - Fixed length to 64 chars
+
+// ==========================================
+// ⚠️ PUBLIC HOSTING CONFIGURATION (GitHub Pages)
+// ==========================================
+// To allow visitors to see forecasts, you MUST paste your keys here.
+// The "Anon" key is safe to share publicly if you have Row Level Security (RLS) enabled.
+export const SUPABASE_PUBLIC_CONFIG = {
+    URL: "",       // Paste your Project URL here (e.g. https://xyz.supabase.co)
+    ANON_KEY: ""   // Paste your Anon Key here (starts with eyJ...)
+};
 
 // Make functions available globally for non-module scripts
 if (typeof window !== 'undefined') {
+    window.SUPABASE_PUBLIC_CONFIG = SUPABASE_PUBLIC_CONFIG;
     window.CONFIG_TYPES = CONFIG_TYPES;
     window.isConfigItem = isConfigItem;
     window.getActualForecasts = getActualForecasts;

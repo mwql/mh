@@ -55,9 +55,32 @@ async function fetchLiveWeatherForCity(cityName) {
 // Fetch predictions from Supabase (fallback to localStorage)
 // ----------------------------------
 async function loadPredictions() {
-    // 1. Try to fetch from Supabase using global config
-    const url = window.SB_URL;
-    const key = window.SB_KEY;
+    // 1. Try to fetch from Supabase using global config or Public Config
+    // 1. Try to fetch from Supabase using global config, Public Config, or Hardcoded Config
+    let url = window.SB_URL;
+    let key = window.SB_KEY;
+    
+    // Check for hardcoded public config (for GitHub Pages visitors)
+    if ((!url || !key) && window.SUPABASE_PUBLIC_CONFIG) {
+        if (window.SUPABASE_PUBLIC_CONFIG.URL && window.SUPABASE_PUBLIC_CONFIG.ANON_KEY) {
+            url = window.SUPABASE_PUBLIC_CONFIG.URL;
+            key = window.SUPABASE_PUBLIC_CONFIG.ANON_KEY;
+        }
+    }
+
+    // If global keys (from admin session) are missing, try PUBLIC config
+    if (!url || !key) {
+        try {
+            // Read from local storage (synced data)
+            const localData = JSON.parse(localStorage.getItem('weatherPredictions') || '[]');
+            const publicConfig = localData.find(p => p.condition === '__PUBLIC_SUPABASE__');
+            if (publicConfig && publicConfig.notes) {
+                const config = JSON.parse(publicConfig.notes);
+                url = config.url;
+                key = config.key;
+            }
+        } catch(e) { console.error("Error loading public config:", e); }
+    }
 
     if (url && key) {
         try {
