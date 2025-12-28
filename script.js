@@ -54,57 +54,100 @@ async function fetchLiveWeatherForCity(cityName) {
 // ----------------------------------
 // Fetch predictions from Supabase (fallback to localStorage)
 // ----------------------------------
+// Fetch predictions from Supabase (fallback to localStorage)
 async function loadPredictions() {
-    // 1. Try to fetch from Supabase using global config or Public Config
-    // 1. Try to fetch from Supabase using global config, Public Config, or Hardcoded Config
+    // 1. Try to fetch from Supabase using global config (from analytics.js)
     let url = window.SB_URL;
     let key = window.SB_KEY;
     
-    // Check for hardcoded public config (for GitHub Pages visitors)
-    if ((!url || !key) && window.SUPABASE_PUBLIC_CONFIG) {
-        if (window.SUPABASE_PUBLIC_CONFIG.URL && window.SUPABASE_PUBLIC_CONFIG.ANON_KEY) {
-            url = window.SUPABASE_PUBLIC_CONFIG.URL;
-            key = window.SUPABASE_PUBLIC_CONFIG.ANON_KEY;
-        }
-    }
-
-    // If global keys (from admin session) are missing, try PUBLIC config
-    if (!url || !key) {
-        try {
-            // Read from local storage (synced data)
-            const localData = JSON.parse(localStorage.getItem('weatherPredictions') || '[]');
-            const publicConfig = localData.find(p => p.condition === '__PUBLIC_SUPABASE__');
-            if (publicConfig && publicConfig.notes) {
-                const config = JSON.parse(publicConfig.notes);
-                url = config.url;
-                key = config.key;
-            }
-        } catch(e) { console.error("Error loading public config:", e); }
-    }
+    // Also check for Hardcoded/Public config if strictly needed, but Weather-main logic simplifies this:
+    // Weather-main primarily checks Global Consts then LocalStorage.
+    // We will stick to Window Globals then LocalStorage.
 
     if (url && key) {
         try {
-            // Filter out analytics logs to save bandwidth
-            const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
+            // Weather-main logic: ?order=date.desc (Simple)
+            // Removed condition=neq filters as per Weather-main style, 
+            // but for safety/cleanliness we usually want to avoid logs in the UI list.
+            // Weather-main's script.js actually fetches: .../predictions?order=date.desc
+            // and THEN filters: const actualForecasts = predictions.filter(...)
+            // I will match that.
+            
+            const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?order=date.desc`;
             
             console.log('Fetching latest forecasts from Supabase...');
             const response = await fetch(requestUrl, {
                 headers: { 
                     'apikey': key,
-                    'Authorization': `Bearer ${key}`,
-                    'Cache-Control': 'no-cache'
+                    'Authorization': `Bearer ${key}`
                 }
             });
             
             if (response.ok) {
                 const data = await response.json();
-                if (Array.isArray(data) && data.length > 0) {
+                const normalizedData = data.map(p => {
+                    let uploader = null;
+                    let city = null;
+                    let notes = p.notes;
+                    
+                    // Extract uploader from notes tag {{uploader:NAME}}
+                    if (notes && notes.includes('{{uploader:')) {
+                        const match = notes.match(/{{uploader:(.*?)}}/);
+                        if (match) {
+                            uploader = match[1];
+                            notes = notes.replace(match[0], '').trim();
+                        }
+                    }
+
+                    // Extract city from notes tag {{city:NAME}} (MH-weather support)
+                    if (notes && notes.includes('{{city:')) {
+                        const match = notes.match(/{{city:(.*?)}}/);
+                        if (match) {
+                            city = match[1];
+                            notes = notes.replace(match[0], '').trim();
+                        }
+                    }
+
+                    return {
+                        date: p.date, 
+                        toDate: p.to_date, 
+                        temperature: p.temperature, 
+                        condition: p.condition, 
+                        notes: notes, 
+                        uploader: uploader,
+                        city: city
+                    };
+                });
+                
+                localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
+                return normalizedData;
+            }
+        } catch (error) {
+            console.error('Error fetching from Supabase:', error);
+        }
+    }
+    
+    // 2. Try localStorage settings (User override)
+    const SB_SETTINGS_KEY = 'supabaseSyncSettings';
+    const storedSettings = localStorage.getItem(SB_SETTINGS_KEY);
+    
+    if (storedSettings) {
+        try {
+            const settings = JSON.parse(storedSettings);
+            const url = settings.url;
+            const key = settings.key;
+            if (url && key) {
+                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?order=date.desc`;
+                const response = await fetch(requestUrl, {
+                    headers: { 'apikey': key, 'Authorization': `Bearer ${key}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
                     const normalizedData = data.map(p => {
                         let uploader = null;
                         let city = null;
                         let notes = p.notes;
                         
-                        // Extract tags
                         if (notes && notes.includes('{{uploader:')) {
                             const match = notes.match(/{{uploader:(.*?)}}/);
                             if (match) {
@@ -130,72 +173,8 @@ async function loadPredictions() {
                             city: city
                         };
                     });
-                    
                     localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
                     return normalizedData;
-                }
-            }
-        } catch (error) {
-            console.error('Error fetching from Supabase:', error);
-        }
-    }
-    
-    // 2. Try localStorage settings (User override)
-    const SB_SETTINGS_KEY = 'supabaseSyncSettings';
-    const storedSettings = localStorage.getItem(SB_SETTINGS_KEY);
-    
-    if (storedSettings) {
-        try {
-            const settings = JSON.parse(storedSettings);
-            const url = settings.url;
-            const key = settings.key;
-            if (url && key) {
-                // Filter logs here too
-                const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?condition=neq.__VIEW_LOG__&order=date.desc&t=${Date.now()}`;
-                const response = await fetch(requestUrl, {
-                    headers: { 
-                        'apikey': key, 
-                        'Authorization': `Bearer ${key}`,
-                        'Cache-Control': 'no-cache'
-                    }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (Array.isArray(data) && data.length > 0) {
-                        const normalizedData = data.map(p => {
-                            let uploader = null;
-                            let city = null;
-                            let notes = p.notes;
-                            
-                            // Extract tags
-                            if (notes && notes.includes('{{uploader:')) {
-                                const match = notes.match(/{{uploader:(.*?)}}/);
-                                if (match) {
-                                    uploader = match[1];
-                                    notes = notes.replace(match[0], '').trim();
-                                }
-                            }
-                            if (notes && notes.includes('{{city:')) {
-                                const match = notes.match(/{{city:(.*?)}}/);
-                                if (match) {
-                                    city = match[1];
-                                    notes = notes.replace(match[0], '').trim();
-                                }
-                            }
-
-                            return {
-                                date: p.date, 
-                                toDate: p.to_date, 
-                                temperature: p.temperature, 
-                                condition: p.condition, 
-                                notes: notes, 
-                                uploader: uploader,
-                                city: city
-                            };
-                        });
-                        localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
-                        return normalizedData;
-                    }
                 }
             }
         } catch (e) {}
