@@ -241,16 +241,28 @@ async function syncToSupabase(predictions) {
     }
   }
 
+  // Ensure strings are trimmed
+  url = url ? url.trim() : '';
+  key = key ? key.trim() : '';
+
   if (!url || !key) {
     console.warn("Admin: Supabase settings not found, skipping sync");
     showSyncStatus("⚠️ Supabase not configured. Data saved locally only.", "warning");
     return false; // Return false to indicate sync didn't happen
   }
 
-  // Validate credentials format
-  if (!url.includes('supabase.co') || !key.startsWith('eyJ')) {
-    console.error("Admin: Invalid Supabase credentials format");
-    showSyncStatus("⚠️ Invalid Supabase credentials. Please check settings.", "error");
+  // Validate credentials format (Relaxed check)
+  // Allow custom domains, so just check for valid URL format
+  const isUrlValid = url.startsWith('http'); 
+  const isKeyValid = key.startsWith('eyJ') && key.length > 20;
+
+  if (!isUrlValid || !isKeyValid) {
+    console.error("Admin: Invalid credentials format", { url: isUrlValid, key: isKeyValid });
+    if (!isUrlValid) {
+        showSyncStatus("⚠️ Invalid URL. Must start with https://", "error");
+    } else {
+        showSyncStatus("⚠️ Invalid Key. Must start with 'eyJ'", "error");
+    }
     return false;
   }
 
