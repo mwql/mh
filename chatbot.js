@@ -1,19 +1,17 @@
 /**
- * GEMINI AI CHATBOT LOGIC
+ * LOCAL FORECAST CHATBOT LOGIC
+ * Responds from stored forecasts without external API calls
  */
-
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent";
-const DEFAULT_GEMINI_KEY = "AIzaSyC2yBUSJolXFpCVzPbM2f0yuhIFApaonOA";
 
 let chatHistory = [];
 let isTyping = false;
 
 // 1. Toggle Chatbot Window
 window.toggleChatbot = function() {
-    const window = document.getElementById('chatbot-window');
-    window.classList.toggle('active');
+    const chatWindow = document.getElementById('chatbot-window');
+    chatWindow.classList.toggle('active');
     
-    if (window.classList.contains('active')) {
+    if (chatWindow.classList.contains('active')) {
         document.getElementById('chat-input').focus();
     }
 }
@@ -27,39 +25,203 @@ window.sendChatMessage = async function() {
     
     // Add User Message to UI
     addMessageToUI('user', message);
+    chatHistory.push({ role: 'user', text: message });
     input.value = '';
-    
-    // Add to History
-    chatHistory.push({ role: "user", parts: [{ text: message }] });
     
     // Show Typing Indicator
     showTypingIndicator();
     
-    try {
-        const response = await callGeminiAPI(message);
+    // Simulate slight delay for natural feel
+    setTimeout(() => {
+        const response = generateLocalResponse(message);
         hideTypingIndicator();
         addMessageToUI('ai', response);
-        chatHistory.push({ role: "model", parts: [{ text: response }] });
-    } catch (error) {
-        hideTypingIndicator();
-        let errorMsg = "Sorry, I encountered an error. Please try again later.";
+        chatHistory.push({ role: 'ai', text: response });
+    }, 300);
+}
+
+// 3. Generate Response from Local Data
+function generateLocalResponse(userMessage) {
+    const msg = userMessage.toLowerCase();
+    
+    // Get forecasts from localStorage
+    const forecasts = getStoredForecasts();
+    
+    // Handle greetings
+    if (/^(hi|hello|hey|howdy|greetings)/i.test(msg)) {
+        return `Hello! I can help you with weather forecasts. Try asking:\n• "What's the weather tomorrow?"\n• "Temperature on Jan 5?"\n• "Forecast for this week"`;
+    }
+    
+    // Handle thanks
+    if (/^(thanks|thank you|thx)/i.test(msg)) {
+        return "You're welcome! Feel free to ask about any forecast dates.";
+    }
+    
+    // Extract date from message
+    const dateInfo = extractDateFromMessage(msg);
+    
+    if (!dateInfo) {
+        return `I can help with weather forecasts! Ask me about specific dates like:\n• "Weather on December 30"\n• "What's the forecast for tomorrow?"\n• "Temperature this weekend"`;
+    }
+    
+    // Find matching forecast
+    const matchingForecasts = findForecastsByDate(forecasts, dateInfo);
+    
+    if (matchingForecasts.length === 0) {
+        return `Sorry, I don't have forecast data for ${formatDateForDisplay(dateInfo)}. Available forecasts:\n${getAvailableDatesPreview(forecasts)}`;
+    }
+    
+    // Format response
+    return formatForecastResponse(matchingForecasts, dateInfo);
+}
+
+// 4. Extract Date from User Message
+function extractDateFromMessage(msg) {
+    const today = new Date();
+    
+    // Handle "today"
+    if (/\btoday\b/.test(msg)) {
+        return today;
+    }
+    
+    // Handle "tomorrow"
+    if (/\btomorrow\b/.test(msg)) {
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        return tomorrow;
+    }
+    
+    // Handle "this week" / "week"
+    if (/\b(this )?week\b/.test(msg)) {
+        return 'week';
+    }
+    
+    // Handle specific date patterns: "Dec 30", "December 30", "30 Dec"
+    const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+    const monthRegex = new RegExp(`\\b(${monthNames.join('|')})[a-z]*\\s+(\\d{1,2})\\b`, 'i');
+    const match1 = msg.match(monthRegex);
+    
+    if (match1) {
+        const monthIndex = monthNames.indexOf(match1[1].toLowerCase().substring(0, 3));
+        const day = parseInt(match1[2]);
+        const year = today.getFullYear();
+        return new Date(year, monthIndex, day);
+    }
+    
+    // Handle "30th December", "5 Jan"
+    const dayMonthRegex = new RegExp(`\\b(\\d{1,2})(st|nd|rd|th)?\\s+(${monthNames.join('|')})[a-z]*\\b`, 'i');
+    const match2 = msg.match(dayMonthRegex);
+    
+    if (match2) {
+        const day = parseInt(match2[1]);
+        const monthIndex = monthNames.indexOf(match2[3].toLowerCase().substring(0, 3));
+        const year = today.getFullYear();
+        return new Date(year, monthIndex, day);
+    }
+    
+    // Handle numeric dates: "12/30", "30-12", "2025-12-30"
+    const numericRegex = /\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/;
+    const match3 = msg.match(numericRegex);
+    
+    if (match3) {
+        return new Date(parseInt(match3[1]), parseInt(match3[2]) - 1, parseInt(match3[3]));
+    }
+    
+    return null;
+}
+
+// 5. Find Forecasts by Date
+function findForecastsByDate(forecasts, dateQuery) {
+    if (dateQuery === 'week') {
+        // Return all forecasts for the next 7 days
+        const today = new Date();
+        const weekLater = new Date(today);
+        weekLater.setDate(weekLater.getDate() + 7);
         
-        if (error.message.includes('429')) {
-            errorMsg = "I'm receiving too many requests right now. Please wait a moment and try again.";
-        } else if (error.message.includes('401') || error.message.includes('403')) {
-            errorMsg = "Invalid API Key. Please check your Gemini Key in the admin panel.";
-        } else if (error.message.includes('404')) {
-            errorMsg = "AI Model not found. Please contact support.";
-        } else {
-            errorMsg = `Error: ${error.message}. Please try again.`;
+        return forecasts.filter(f => {
+            const fDate = new Date(f.date + 'T00:00:00');
+            return fDate >= today && fDate <= weekLater;
+        });
+    }
+    
+    // Specific date
+    const targetDate = formatDateYMD(dateQuery);
+    
+    return forecasts.filter(f => {
+        // Check if date matches
+        if (f.date === targetDate) return true;
+        
+        // Check if within date range
+        if (f.toDate) {
+            const startDate = new Date(f.date + 'T00:00:00');
+            const endDate = new Date(f.toDate + 'T00:00:00');
+            const queryDate = new Date(dateQuery);
+            return queryDate >= startDate && queryDate <= endDate;
         }
         
-        addMessageToUI('ai', errorMsg);
-        console.error("Gemini Error:", error);
+        return false;
+    });
+}
+
+// 6. Format Response
+function formatForecastResponse(forecasts, dateInfo) {
+    if (forecasts.length === 1) {
+        const f = forecasts[0];
+        let response = `Forecast for ${formatDateForDisplay(dateInfo)}:\n\n`;
+        response += `🌡️ Temperature: ${f.temperature}°C\n`;
+        response += `☁️ Condition: ${f.condition}\n`;
+        if (f.city) response += `📍 City: ${f.city}\n`;
+        if (f.uploader) response += `👤 By: ${f.uploader}\n`;
+        if (f.notes) response += `📝 ${f.notes}`;
+        return response;
+    }
+    
+    // Multiple forecasts
+    let response = `Found ${forecasts.length} forecasts:\n\n`;
+    forecasts.forEach((f, i) => {
+        const dateRange = f.toDate ? `${f.date} to ${f.toDate}` : f.date;
+        response += `${i + 1}. ${f.condition} - ${f.temperature}°C (${dateRange})\n`;
+    });
+    return response;
+}
+
+// 7. Helper Functions
+function getStoredForecasts() {
+    const raw = localStorage.getItem('weatherPredictions');
+    if (!raw) return [];
+    
+    try {
+        const predictions = JSON.parse(raw);
+        // Filter out config items
+        return predictions.filter(p => {
+            const cond = (p.condition || '').trim();
+            return !cond.startsWith('__');
+        });
+    } catch (e) {
+        return [];
     }
 }
 
-// 3. Add Message to UI
+function formatDateYMD(date) {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+}
+
+function formatDateForDisplay(date) {
+    if (date === 'week') return 'this week';
+    const options = { month: 'short', day: 'numeric' };
+    return date.toLocaleDateString('en-US', options);
+}
+
+function getAvailableDatesPreview(forecasts) {
+    if (forecasts.length === 0) return 'No forecasts available.';
+    const preview = forecasts.slice(0, 3).map(f => f.date).join(', ');
+    return forecasts.length > 3 ? `${preview}, and ${forecasts.length - 3} more...` : preview;
+}
+
+// 8. UI Functions
 function addMessageToUI(sender, text) {
     const messagesContainer = document.getElementById('chat-messages');
     const msgDiv = document.createElement('div');
@@ -71,7 +233,6 @@ function addMessageToUI(sender, text) {
     messagesContainer.scrollTop = messagesContainer.scrollHeight;
 }
 
-// 4. Typing Indicator
 function showTypingIndicator() {
     isTyping = true;
     const messagesContainer = document.getElementById('chat-messages');
@@ -89,101 +250,3 @@ function hideTypingIndicator() {
     if (indicator) indicator.remove();
 }
 
-// 5. Call Gemini API
-async function callGeminiAPI(userPrompt) {
-    // A. Get API Key (localStorage fallback to default)
-    let apiKey = localStorage.getItem('geminiAIKey') || DEFAULT_GEMINI_KEY;
-    
-    // Try to find in sync predictions if not in localStorage
-    const predictionsRaw = localStorage.getItem('weatherPredictions');
-    if (predictionsRaw) {
-        try {
-            const predictions = JSON.parse(predictionsRaw);
-            const geminiConfig = predictions.find(p => p.condition === '__GEMINI_CONFIG__');
-            if (geminiConfig && geminiConfig.notes) {
-                apiKey = geminiConfig.notes;
-            }
-        } catch (e) {}
-    }
-
-    // B. Get Weather Context
-    const context = getWeatherContext();
-    
-    // C. Construct System Instruction
-    const systemInstruction = `You are "Mahdawi AI", a precise weather assistant for "الارصاد المهدوية" (Mahdawi Weather).
-    Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
-    
-    Forecast Data:
-    ${context}
-    
-    Rules:
-    1. Respond in exactly this structure:
-       - Heading: A single plain text line (NO bolding, NO asterisks).
-       - Details: Use new lines starting with parentheses. Example: ( Info here )
-       - Conclusion: A single final line.
-    2. ABSOLUTELY DO NOT use asterisks (*) anywhere in your response.
-    3. Be very brief and organized.
-    4. Answer in the user's language (Arabic or English).
-    5. If data is missing, heading should be: "NO DATA FOR [DATE]".
-    6. Maintain a professional tone.`;
-
-    // D. Prepare Payload
-    const payload = {
-        contents: [
-            {
-                role: "user",
-                parts: [{ text: systemInstruction }]
-            },
-            {
-                role: "model",
-                parts: [{ text: "Understood. I am Mahdawi AI, ready to assist with weather inquiries using the provided forecasts." }]
-            },
-            ...chatHistory
-        ],
-        generationConfig: {
-            temperature: 0.7,
-            topK: 40,
-            topP: 0.95,
-            maxOutputTokens: 1024,
-        }
-    };
-
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
-        body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
-}
-
-// 6. Get Weather Context from Local Data
-function getWeatherContext() {
-    const raw = localStorage.getItem('weatherPredictions');
-    if (!raw) return "No forecast data available at the moment.";
-    
-    try {
-        const predictions = JSON.parse(raw);
-        // Filter out config items
-        const actualForecasts = predictions.filter(p => {
-            const cond = (p.condition || '').trim();
-            return !cond.startsWith('__');
-        });
-        
-        if (actualForecasts.length === 0) return "No official forecasts currently listed.";
-        
-        return actualForecasts.map(p => {
-            return `- Date: ${p.date}${p.toDate ? ' to ' + p.toDate : ''}, Temp: ${p.temperature}°C, Condition: ${p.condition}, Notes: ${p.notes || 'None'}, City: ${p.city || 'Kuwait'}, Uploader: ${p.uploader || 'Admin'}`;
-        }).join('\n');
-        
-    } catch (e) {
-        return "Error parsing weather data.";
-    }
-}

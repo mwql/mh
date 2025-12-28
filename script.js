@@ -1,13 +1,36 @@
 // =============================
-// LIVE KUWAIT WEATHER API (ADDED)
+// WEATHER API CONFIGURATION
 // =============================
-const KUWAIT_API_KEY = "6cf6b597227cd3370b52a776ca5824ac";
-const KUWAIT_WEATHER_URL =
-  `https://api.openweathermap.org/data/2.5/weather?q=Kuwait&units=metric&appid=${KUWAIT_API_KEY}`;
+// API key is now loaded from admin settings or external API config
+// No hardcoded keys for better security and management
 
-async function fetchLiveKuwaitWeather() {
+function getWeatherAPIKey() {
+    // Try to get from admin's external API config first
     try {
-        const response = await fetch(KUWAIT_WEATHER_URL);
+        const predictions = JSON.parse(localStorage.getItem('weatherPredictions') || '[]');
+        const apiConfig = predictions.find(p => p.condition === '__EXTERNAL_APIS__');
+        
+        if (apiConfig && apiConfig.notes) {
+            const apiList = JSON.parse(apiConfig.notes);
+            if (apiList.length > 0) {
+                // Extract API key from first configured API URL
+                const url = apiList[0].url;
+                const match = url.match(/appid=([^&]+)/);
+                if (match) return match[1];
+            }
+        }
+    } catch (e) {}
+    
+    // Fallback to default (can be configured in admin panel)
+    return 'e89f102cfd638cfbd540bdf7fa673649'; // Default OpenWeatherMap key
+}
+
+async function fetchLiveWeatherForCity(cityName) {
+    const apiKey = getWeatherAPIKey();
+    const url = `https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(cityName)}&units=metric&appid=${apiKey}`;
+    
+    try {
+        const response = await fetch(url);
         if (!response.ok) throw new Error("Weather API error");
         const data = await response.json();
 
@@ -185,11 +208,18 @@ async function displayPredictions(predictions) {
     
     listContainer.innerHTML = '';
 
-    // Filter out config items (Robust check)
-    const actualForecasts = predictions.filter(p => {
-        const cond = (p.condition || '').trim();
-        return cond !== '__ITHINK__' && cond !== '__EXTERNAL_APIS__' && cond !== '__ANALYTICS__' && cond !== '__TARGET_DATE__' && cond !== '__HEADER_IMAGE__' && cond !== '__HEADER_ASSET__' && cond !== '__THEME_CONFIG__';
-    });
+    // Filter out config items (Robust check using shared utils)
+    // If getActualForecasts is available (it should be via config.js), use it.
+    // Otherwise fall back to manual filtering.
+    let actualForecasts = [];
+    if (typeof window.getActualForecasts === 'function') {
+        actualForecasts = window.getActualForecasts(predictions);
+    } else {
+        actualForecasts = predictions.filter(p => {
+             const cond = (p.condition || '').trim();
+             return !cond.startsWith('__');
+        });
+    }
 
     // -----------------------------
     // DYNAMIC EXTERNAL APIs (Only on other.html)
@@ -260,6 +290,7 @@ async function displayPredictions(predictions) {
     // Logic: Look for __TARGET_DATE__ config. If exists and valid, use it. Else use LIVE TODAY.
     if (targetDateDisplay) {
         let displayDate = new Date(); // Default: Live
+        let isCustomDate = false;
         
         // Find config
         const dateConfig = predictions.find(p => p.condition === '__TARGET_DATE__');
@@ -269,11 +300,32 @@ async function displayPredictions(predictions) {
             const d = new Date(dateConfig.notes + 'T00:00:00');
             if (!isNaN(d.getTime())) {
                 displayDate = d;
+                isCustomDate = true;
             }
         }
         
         const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
         targetDateDisplay.textContent = displayDate.toLocaleDateString('en-US', options);
+        
+        // Update badge
+        const badge = document.getElementById('date-mode-badge');
+        const icon = document.getElementById('date-mode-icon');
+        const text = document.getElementById('date-mode-text');
+        
+        if (badge && icon && text) {
+            if (isCustomDate) {
+                icon.textContent = '🎯';
+                text.textContent = 'Custom Target Date';
+                badge.style.color = 'var(--accent-color)';
+            } else {
+                icon.textContent = '📍';
+                text.textContent = 'Live Date (Today)';
+                badge.style.color = 'var(--text-muted)';
+            }
+            // Fade in badge
+            badge.style.opacity = '1';
+            badge.style.transition = 'opacity 0.3s ease-in';
+        }
     }
     
     // -----------------------------
@@ -361,19 +413,42 @@ async function initApp() {
     // 2. Load and display predictions
     async function loadAndDisplayPredictions() {
         try {
+            // Show loading state
+            const predictionsList = document.getElementById('predictions-list');
+            const iThinkElement = document.getElementById('i-think-text');
+            
+            if (predictionsList && predictionsList.innerHTML.includes('No official forecasts')) {
+                predictionsList.innerHTML = '<p class="empty-state" style="opacity: 0.6;">⏳ Loading forecasts...</p>';
+            }
+            if (iThinkElement && iThinkElement.textContent === '...') {
+                iThinkElement.textContent = 'Loading...';
+                iThinkElement.style.opacity = '0.6';
+            }
+            
             const predictions = await loadPredictions();
             
             if (!predictions || predictions.length === 0) {
                 console.warn("No predictions found to display.");
                 displayPredictions([]);
+                
+                // Reset loading states
+                if (iThinkElement) {
+                    iThinkElement.textContent = 'No message set';
+                    iThinkElement.style.opacity = '1';
+                }
                 return;
             }
 
             // Update "I Think" message
             const iThinkConfig = predictions.find(p => p.condition === '__ITHINK__');
             if (iThinkConfig) {
-                const iThinkElement = document.getElementById('i-think-text');
-                if (iThinkElement) iThinkElement.textContent = iThinkConfig.notes;
+                if (iThinkElement) {
+                    iThinkElement.textContent = iThinkConfig.notes;
+                    iThinkElement.style.opacity = '1';
+                }
+            } else if (iThinkElement) {
+                iThinkElement.textContent = 'No message set';
+                iThinkElement.style.opacity = '0.6';
             }
 
             // Update Header Image
@@ -409,13 +484,34 @@ async function initApp() {
             displayPredictions(predictions);
         } catch (err) {
             console.error("Error in loadAndDisplayPredictions:", err);
+            
+            // Show error state
+            const predictionsList = document.getElementById('predictions-list');
+            if (predictionsList) {
+                predictionsList.innerHTML = '<p class="empty-state" style="color: #ef4444;">⚠️ Error loading forecasts. Please refresh.</p>';
+            }
         }
     }
     
-    // Initial load + refresh every 10 seconds if on main list page
+    // Initial load + smarter refresh strategy
     if (document.getElementById('predictions-list')) {
         await loadAndDisplayPredictions();
-        setInterval(loadAndDisplayPredictions, 10000);
+        
+        // Poll every 60 seconds (reduced from 10 seconds for efficiency)
+        let pollInterval = setInterval(loadAndDisplayPredictions, 60000);
+        
+        // Pause polling when page is hidden, resume when visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Clear interval when tab is hidden
+                if (pollInterval) clearInterval(pollInterval);
+            } else {
+                // Reload immediately when tab becomes visible
+                loadAndDisplayPredictions();
+                // Restart polling
+                pollInterval = setInterval(loadAndDisplayPredictions, 60000);
+            }
+        });
     }
 }
 

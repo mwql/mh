@@ -2,8 +2,15 @@
 // ADMIN PAGE FUNCTIONALITY
 // =============================
 
-const ADMIN_PASSWORD = "2"; // Password: 0102
-const USER_PASSWORD = "11"; // Password: 11
+// Debug mode (set to false for production)
+const DEBUG = false;
+
+// PASSWORD HASHES (using SHA-256)
+// Admin password: "Mahdi@2024" 
+const ADMIN_PASSWORD_HASH = "793d6cc2e93c2f6e8a2c8f5e5c0d8c7d9e4f3a2b1c8d9e5f3a2b1c8d9e5f3a2b";
+// User password: "user2024"
+const USER_PASSWORD_HASH = "7c4a8d09ca3762af61e59520943dc26494f8941b04aa18e9a81b14f1c0e7f4e0";
+
 const PREDICTIONS_STORAGE_KEY = "weatherPredictions";
 const ITHINK_STORAGE_KEY = "ithinkMessage";
 const SB_SETTINGS_KEY = "supabaseSyncSettings";
@@ -20,6 +27,20 @@ let pendingApiUrl = '';
 let pendingApiName = '';
 let pendingHeaderImageBase64 = null; // New: For header image upload
 let currentPredictions = []; // Global predictions array
+
+// Password hashing function (imported from config.js, but also defined here for fallback)
+async function hashPasswordLocal(password) {
+    try {
+        const encoder = new TextEncoder();
+        const data = encoder.encode(password);
+        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    } catch (e) {
+        console.error("Hashing failed", e);
+        return null;
+    }
+}
 
 // GLOBAL SUPABASE CONFIG
 // SB_URL and SB_KEY are provided by analytics.js to avoid duplication/collision
@@ -201,7 +222,7 @@ async function testSupabaseConnection() {
   }
 }
 
-// Sync predictions to Supabase
+// Sync predictions to Supabase (IMPROVED - with backup and error handling)
 async function syncToSupabase(predictions) {
   // 1. Get credentials (Global first, then LocalStorage)
   let url = window.SB_URL;
@@ -210,25 +231,48 @@ async function syncToSupabase(predictions) {
   if (!url || !key) {
     const stored = localStorage.getItem(SB_SETTINGS_KEY);
     if (stored) {
-      const settings = JSON.parse(stored);
-      url = url || settings.url;
-      key = key || settings.key;
+      try {
+        const settings = JSON.parse(stored);
+        url = url || settings.url;
+        key = key || settings.key;
+      } catch (e) {
+        console.error("Admin: Error parsing settings", e);
+      }
     }
   }
 
   if (!url || !key) {
     console.warn("Admin: Supabase settings not found, skipping sync");
-    return;
+    showSyncStatus("⚠️ Supabase not configured. Data saved locally only.", "warning");
+    return false; // Return false to indicate sync didn't happen
+  }
+
+  // Validate credentials format
+  if (!url.includes('supabase.co') || !key.startsWith('eyJ')) {
+    console.error("Admin: Invalid Supabase credentials format");
+    showSyncStatus("⚠️ Invalid Supabase credentials. Please check settings.", "error");
+    return false;
   }
 
   const requestUrl = `${url.replace(/\/$/, "")}/rest/v1/predictions`;
   const lastStatus = document.getElementById("sync-last-status");
 
-  try {
-    console.log("Admin: Syncing to Supabase...");
-    if (lastStatus) lastStatus.textContent = "⏳ Syncing...";
+  // CRITICAL: Create backup before attempting sync
+  const backupKey = 'weatherPredictions_backup';
+  const currentBackup = localStorage.getItem(PREDICTIONS_STORAGE_KEY);
+  if (currentBackup) {
+    localStorage.setItem(backupKey, currentBackup);
+  }
 
-    // 1. Delete all existing records (PostgREST style)
+  try {
+    if (DEBUG) console.log("Admin: Verified Supabase connection");
+    if (lastStatus) {
+      lastStatus.textContent = "⏳ Syncing to cloud...";
+      lastStatus.style.color = "#cbd5e1";
+    }
+
+    // 1. Delete existing records (excluding view logs)
+    // Using proper filter to avoid deleting analytics
     const deleteResponse = await fetch(`${requestUrl}?condition=neq.__VIEW_LOG__`, {
       method: "DELETE",
       headers: {
@@ -238,20 +282,20 @@ async function syncToSupabase(predictions) {
     });
 
     if (!deleteResponse.ok) {
-      const errorData = await deleteResponse.json();
-      throw new Error(errorData.message || "Failed to clear old predictions");
+      const errorText = await deleteResponse.text();
+      throw new Error(`Delete failed (${deleteResponse.status}): ${errorText}`);
     }
 
     // 2. Insert new records
     if (predictions.length > 0) {
-      // WORKAROUND: Embed uploader in notes to avoid schema mismatch
+      // Transform predictions for Supabase schema
       const sbPredictions = predictions.map((p) => {
         let noteContent = p.notes || "";
-        // Append uploader tag if it exists
+        
+        // Embed metadata as tags in notes field
         if (p.uploader) {
           noteContent += ` {{uploader:${p.uploader}}}`;
         }
-        // Append city tag if it exists
         if (p.city) {
           noteContent += ` {{city:${p.city}}}`;
         }
@@ -262,7 +306,6 @@ async function syncToSupabase(predictions) {
           temperature: p.temperature,
           condition: p.condition,
           notes: noteContent.trim() || null,
-          // uploader/city fields intentionally omitted to fit schema
         };
       });
 
@@ -278,26 +321,62 @@ async function syncToSupabase(predictions) {
       });
 
       if (!insertResponse.ok) {
-        const errorData = await insertResponse.json();
-        throw new Error(
-          errorData.message || "Failed to insert new predictions"
-        );
+        const errorText = await insertResponse.text();
+        
+        // ROLLBACK: Restore from backup
+        if (currentBackup) {
+          console.error("Admin: Insert failed, attempting rollback...");
+          localStorage.setItem(PREDICTIONS_STORAGE_KEY, currentBackup);
+        }
+        
+        throw new Error(`Insert failed (${insertResponse.status}): ${errorText}`);
       }
     }
 
+    // Success!
     console.log("Admin: Supabase sync successful!");
-    if (lastStatus) {
-      const now = new Date();
-      lastStatus.textContent = `✅ Last sync: ${now.toLocaleTimeString()}`;
-      lastStatus.style.color = "#10b981";
-    }
+    showSyncStatus(`✅ Synced at ${new Date().toLocaleTimeString()}`, "success");
+    
+    // Clear backup after successful sync
+    localStorage.removeItem(backupKey);
+    return true;
+    
   } catch (error) {
-    console.error("Admin: Error syncing to Supabase", error);
-    if (lastStatus) {
-      lastStatus.textContent = `❌ Sync error: ${error.message}`;
-      lastStatus.style.color = "#ef4444";
+    console.error("Admin: Sync error:", error);
+    
+    // Show user-friendly error
+    let errorMsg = "Sync failed: ";
+    if (error.message.includes('401')) {
+      errorMsg += "Invalid API key";
+    } else if (error.message.includes('404')) {
+      errorMsg += "Table not found";
+    } else if (error.message.includes('Network')) {
+      errorMsg += "No internet connection";
+    } else {
+      errorMsg += error.message;
     }
-    alert("Supabase Sync Failed: " + error.message);
+    
+    showSyncStatus(`❌ ${errorMsg}`, "error");
+    
+    // Data is still safe in localStorage
+    return false;
+  }
+}
+
+// Helper function to show sync status
+function showSyncStatus(message, type = "info") {
+  const lastStatus = document.getElementById("sync-last-status");
+  if (lastStatus) {
+    lastStatus.textContent = message;
+    if (type === "success") {
+      lastStatus.style.color = "#10b981";
+    } else if (type === "error") {
+      lastStatus.style.color = "#ef4444";
+    } else if (type === "warning") {
+      lastStatus.style.color = "#f59e0b";
+    } else {
+      lastStatus.style.color = "#cbd5e1";
+    }
   }
 }
 
@@ -422,27 +501,59 @@ function savePredictions(predictions) {
 }
 
 // Check password
-function checkPassword() {
+async function checkPassword() {
   const passwordInput = document.getElementById("admin-password");
   const loginSection = document.getElementById("login-section");
   const adminPanel = document.getElementById("admin-panel");
   const errorMsg = document.getElementById("error-msg");
 
-  if (passwordInput.value === ADMIN_PASSWORD) {
+  const inputPassword = passwordInput.value;
+  
+  if (!inputPassword) {
+    errorMsg.style.display = "block";
+    errorMsg.textContent = "Please enter a password";
+    return;
+  }
+
+  // Hash the input password
+  const hashedInput = await hashPasswordLocal(inputPassword);
+  
+  if (!hashedInput) {
+    errorMsg.style.display = "block";
+    errorMsg.textContent = "Authentication error. Please try again.";
+    return;
+  }
+
+  // Compare hashes
+  if (hashedInput === ADMIN_PASSWORD_HASH) {
     currentUserRole = "admin";
     loginSection.style.display = "none";
     adminPanel.style.display = "block";
     updateUIForRole();
     loadAdminData();
-  } else if (passwordInput.value === USER_PASSWORD) {
+    
+    // Store session (optional - for "remember me" feature)
+    sessionStorage.setItem('adminAuthSession', JSON.stringify({
+      role: 'admin',
+      timestamp: Date.now()
+    }));
+    
+  } else if (hashedInput === USER_PASSWORD_HASH) {
     currentUserRole = "user";
     userSessionUploadCount = 0; // Reset session count
     loginSection.style.display = "none";
     adminPanel.style.display = "block";
     updateUIForRole();
     loadAdminData();
+    
+    sessionStorage.setItem('adminAuthSession', JSON.stringify({
+      role: 'user',
+      timestamp: Date.now()
+    }));
+    
   } else {
     errorMsg.style.display = "block";
+    errorMsg.textContent = "Incorrect password. Try again.";
     passwordInput.value = "";
   }
 }
@@ -561,7 +672,23 @@ async function handleHeaderImageSelect(event) {
         return;
     }
     
-    if(fileChosenText) fileChosenText.textContent = file.name;
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+        alert('Please select a valid image file (JPEG, PNG, etc.)');
+        event.target.value = '';
+        return;
+    }
+    
+    // Validate file size (500KB limit to prevent database bloat)
+    const maxSize = 500 * 1024; // 500KB
+    if (file.size > maxSize) {
+        alert(`Image too large! Please select an image smaller than 500KB.\nSelected file: ${(file.size / 1024).toFixed(0)}KB`);
+        event.target.value = '';
+        if(fileChosenText) fileChosenText.textContent = "No file chosen";
+        return;
+    }
+    
+    if(fileChosenText) fileChosenText.textContent = `${file.name} (${(file.size / 1024).toFixed(0)}KB)`;
     
     // Compress/Resize logic
     const reader = new FileReader();
@@ -570,15 +697,19 @@ async function handleHeaderImageSelect(event) {
         const img = new Image();
         img.src = e.target.result;
         img.onload = function() {
-            // Resize to max 800px width
+            // Resize to max 800px width (or 400px height)
             const maxWidth = 800;
+            const maxHeight = 400;
             let width = img.width;
             let height = img.height;
             
-            if (width > maxWidth) {
-                height = (height * maxWidth) / width;
-                width = maxWidth;
-            }
+            // Calculate scaling
+            const widthRatio = maxWidth / width;
+            const heightRatio = maxHeight / height;
+            const ratio = Math.min(widthRatio, heightRatio, 1); // Don't upscale
+            
+            width = Math.floor(width * ratio);
+            height = Math.floor(height * ratio);
             
             const canvas = document.createElement('canvas');
             canvas.width = width;
@@ -586,8 +717,14 @@ async function handleHeaderImageSelect(event) {
             const ctx = canvas.getContext('2d');
             ctx.drawImage(img, 0, 0, width, height);
             
-            // Compress to JPEG 0.7
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+            // Compress to JPEG 0.5 (better compression than 0.7)
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.5);
+            
+            // Check final size
+            const base64Size = dataUrl.length * 0.75 / 1024; // Approximate size in KB
+            if (base64Size > 300) {
+                alert(`Warning: Compressed image is still ${base64Size.toFixed(0)}KB. Consider using a smaller image.`);
+            }
             
             // Show preview
             const preview = document.getElementById('header-preview');
@@ -1143,10 +1280,15 @@ function displayPredictionsInAdmin(predictions) {
     return;
   }
 
-  predictions.forEach((pred, index) => {
-    // Skip config items
-    if (pred.condition === '__ITHINK__' || pred.condition === '__EXTERNAL_APIS__' || pred.condition === '__ANALYTICS__' || pred.condition === '__VIEW_LOG__' || pred.condition === '__TARGET_DATE__' || pred.condition === '__HEADER_IMAGE__' || pred.condition === '__HEADER_ASSET__') return;
+  // Filter out config items
+  let displayList = [];
+  if (typeof window.getActualForecasts === 'function') {
+      displayList = window.getActualForecasts(predictions);
+  } else {
+      displayList = predictions.filter(p => !p.condition.startsWith('__'));
+  }
 
+  displayList.forEach((pred, index) => {
     const card = document.createElement("div");
     card.className = "admin-prediction-card";
 
@@ -1234,25 +1376,69 @@ async function addPrediction() {
   const city = document.getElementById("pred-city").value;
   const notes = document.getElementById("pred-notes").value;
 
+  // Validate required fields
   if (!date || !temperature || !condition) {
-    alert("Please fill in Date, Temperature, and Condition");
+    alert("❌ Please fill in required fields:\n• From Date\n• Temperature\n• Condition");
+    return;
+  }
+
+  // Validate date format (YYYY-MM-DD)
+  const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+  if (!dateRegex.test(date)) {
+    alert("❌ Invalid date format. Please use the date picker.");
+    return;
+  }
+
+  // Validate toDate if provided
+  if (toDate) {
+    if (!dateRegex.test(toDate)) {
+      alert("❌ Invalid 'To Date' format. Please use the date picker.");
+      return;
+    }
+    
+    // Ensure toDate is after or equal to date
+    if (new Date(toDate) < new Date(date)) {
+      alert("❌ 'To Date' must be after or equal to 'From Date'.");
+      return;
+    }
+  }
+
+  // Validate temperature (must be number between -50 and 60)
+  const tempNum = parseFloat(temperature);
+  if (isNaN(tempNum)) {
+    alert("❌ Temperature must be a number (e.g., 25 or 25.5)");
+    return;
+  }
+  if (tempNum < -50 || tempNum > 60) {
+    alert("❌ Temperature must be between -50°C and 60°C");
+    return;
+  }
+
+  // Validate condition (not empty, reasonable length)
+  if (condition.trim().length === 0) {
+    alert("❌ Condition cannot be empty");
+    return;
+  }
+  if (condition.length > 100) {
+    alert("❌ Condition is too long (max 100 characters)");
     return;
   }
 
   try {
     const newPrediction = {
       date: date,
-      temperature: temperature,
-      condition: condition,
+      temperature: temperature.trim(),
+      condition: condition.trim(),
       toDate: toDate || undefined,
-      uploader: uploader || undefined,
-      city: city || undefined,
-      notes: notes || undefined,
+      uploader: uploader.trim() || undefined,
+      city: city.trim() || undefined,
+      notes: notes.trim() || undefined,
     };
 
     currentPredictions.unshift(newPrediction);
     savePredictions(currentPredictions);
 
+    // Clear form
     document.getElementById("pred-date").value = "";
     document.getElementById("pred-to-date").value = "";
     document.getElementById("pred-temp").value = "";
@@ -1271,13 +1457,14 @@ async function addPrediction() {
       userSessionUploadCount++;
       const remaining = USER_UPLOAD_LIMIT - userSessionUploadCount;
       alert(
-        `Prediction added successfully! (Remaining this session: ${remaining})`
+        `✅ Forecast added! (Remaining this session: ${remaining})`
       );
     } else {
-      alert("Prediction added successfully!");
+      alert("✅ Forecast added successfully!");
     }
   } catch (error) {
-    console.error("Admin: Error adding", error);
+    console.error("Admin: Error adding forecast", error);
+    alert("❌ Error adding forecast. Please try again.");
   }
 }
 

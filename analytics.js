@@ -2,8 +2,34 @@
 // PAGE VIEW ANALYTICS (Synced)
 // =============================
 
-window.SB_URL = 'https://jfmvebvwovibxuxskrcd.supabase.co';
-window.SB_KEY = 'sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh';
+// IMPORTANT: Supabase credentials are now loaded from settings
+// Do NOT hardcode keys here - they should be set in admin panel
+window.SB_URL = null;
+window.SB_KEY = null;
+
+// Load Supabase credentials from localStorage settings
+function loadSupabaseCredentials() {
+    try {
+        const stored = localStorage.getItem('supabaseSyncSettings');
+        if (stored) {
+            const settings = JSON.parse(stored);
+            if (settings.url && settings.key) {
+                // Basic validation
+                if (settings.url.includes('supabase.co') && settings.key.startsWith('eyJ')) {
+                    window.SB_URL = settings.url;
+                    window.SB_KEY = settings.key;
+                    return true;
+                } else {
+                    console.warn('Analytics: Invalid Supabase credentials format');
+                    return false;
+                }
+            }
+        }
+    } catch (e) {
+        console.error('Analytics: Error loading credentials', e);
+    }
+    return false;
+}
 
 // Get today's date in YYYY-MM-DD format
 function getTodayDate() {
@@ -16,33 +42,40 @@ function getTodayDate() {
 
 // Track a page view (Unique per day per device, Synced to DB)
 async function trackPageView() {
+    // Load credentials first
+    if (!loadSupabaseCredentials()) {
+        console.warn('Analytics: Supabase not configured, skipping tracking');
+        return;
+    }
+
     const today = getTodayDate();
-    const visitTokenKey = `sync_v5_token_${today}`;
+    const visitTokenKey = `sync_v6_token_${today}`;
     
     // 1. Check if already visited in this session
     if (sessionStorage.getItem(visitTokenKey)) {
-        console.log('Analytics: Already visited today');
-        return; 
+        return; // Silent - already tracked
     }
-    
-    console.log('Analytics: recording new visit...');
 
     try {
-        const url = `${SB_URL.replace(/\/$/, '')}/rest/v1/predictions`;
+        const url = `${window.SB_URL.replace(/\/$/, '')}/rest/v1/predictions`;
         
         // INSERT new log record (Safe, no race conditions)
         const payload = {
             condition: '__VIEW_LOG__',
-            notes: JSON.stringify({ device: 'visitor', date: today }), // Minimal data
-            date: today,      // Store real date for easy clearing later
-            temperature: '0'  // Dummy
+            notes: JSON.stringify({ 
+                device: navigator.userAgent.substring(0, 50), // First 50 chars of UA
+                timestamp: new Date().toISOString(),
+                date: today 
+            }),
+            date: today,
+            temperature: '0'  // Required field
         };
 
         const response = await fetch(url, {
             method: 'POST',
             headers: {
-                'apikey': SB_KEY,
-                'Authorization': `Bearer ${SB_KEY}`,
+                'apikey': window.SB_KEY,
+                'Authorization': `Bearer ${window.SB_KEY}`,
                 'Content-Type': 'application/json',
                 'Prefer': 'return=minimal'
             },
@@ -50,23 +83,20 @@ async function trackPageView() {
         });
         
         if (response.ok) {
-            // Mark as visited in session
             sessionStorage.setItem(visitTokenKey, 'true');
-            console.log('Analytics: Logged visit successfully');
+            console.log('Analytics: Visit logged');
         } else {
-            console.error('Analytics: Log failed', await response.text());
+            const errorText = await response.text();
+            console.error('Analytics: Failed to log visit', response.status, errorText);
         }
 
     } catch (error) {
-        console.error('Analytics Limit/Error:', error);
+        console.error('Analytics: Error tracking visit', error.message);
     }
 }
 
-// Helper to reset views (Admin use mainly, but logic lives here or in admin.js)
-// Since we are moving to DB, admin.js should handle the DB update directly for reset.
-// We keep this for local testing or valid fallback.
-
-// Auto-track page view when script loads
+// Auto-track page view when script loads (only on index page)
 if (window.location.pathname.includes('index.html') || window.location.pathname === '/' || window.location.pathname.endsWith('/')) {
-    trackPageView();
+    // Delay slightly to ensure settings are loaded
+    setTimeout(trackPageView, 500);
 }
