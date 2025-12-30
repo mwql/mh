@@ -183,11 +183,17 @@ header img {
   letter-spacing: 1px;
 }
 
+
 .custom-section p {
   color: #e2e8f0;
   line-height: 1.7;
   font-size: 0.95rem;
 }
+
+#i-think-text {
+  white-space: pre-wrap;
+}
+
 
 /* Predictions List */
 .predictions-list-section h3 {

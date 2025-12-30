@@ -29,6 +29,7 @@ let pendingApiUrl = "";
 let pendingApiName = "";
 let pendingHeaderImageBase64 = null; // New: For header image upload
 let currentPredictions = []; // Global predictions array
+let editingIndex = -1; // -1 means adding new, >= 0 means editing
 
 // Password hashing function (imported from config.js, but also defined here for fallback)
 async function hashPasswordLocal(password) {
@@ -325,6 +326,17 @@ async function syncToSupabase(predictions) {
         };
       });
 
+      // Handle inactive items logic
+      const finalSbPredictions = sbPredictions.map((sbP, idx) => {
+        const originalP = predictions[idx];
+        if (originalP.isActive === false) { // Only explicitly false
+          const suffix = " {{active:false}}";
+          if (sbP.notes) sbP.notes += suffix;
+          else sbP.notes = suffix.trim();
+        }
+        return sbP;
+      });
+
       const insertResponse = await fetch(requestUrl, {
         method: "POST",
         headers: {
@@ -333,7 +345,7 @@ async function syncToSupabase(predictions) {
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
-        body: JSON.stringify(sbPredictions),
+        body: JSON.stringify(finalSbPredictions), // Us final modified list
       });
 
       if (!insertResponse.ok) {
@@ -440,6 +452,13 @@ async function initializePredictions() {
             }
           }
 
+          // Extract active state
+          let isActive = true; // Default to true (for legacy items)
+          if (notes && notes.includes("{{active:false}}")) {
+             isActive = false;
+             notes = notes.replace("{{active:false}}", "").trim();
+          }
+
           return {
             date: p.date,
             toDate: p.to_date,
@@ -448,6 +467,7 @@ async function initializePredictions() {
             notes: notes,
             uploader: uploader,
             city: city, // preserved
+            isActive: isActive, // New Field
           };
         });
         localStorage.setItem(
@@ -606,14 +626,25 @@ async function loadIThinkMessage() {
     const textarea = document.getElementById("ithink-message");
     if (textarea) textarea.value = configItem.notes;
   }
+
+  // Load Title
+  const titleConfig = currentPredictions.find(
+    (p) => p.condition === "__ITHINK_TITLE__"
+  );
+  if (titleConfig && titleConfig.notes) {
+    const titleInput = document.getElementById("ithink-title");
+    if (titleInput) titleInput.value = titleConfig.notes;
+  }
 }
 
 // Save "I Think" message
 async function saveIThinkMessage() {
   const textarea = document.getElementById("ithink-message");
   const message = textarea.value;
+  const titleInput = document.getElementById("ithink-title");
+  const title = titleInput ? titleInput.value.trim() : "";
 
-  // Find or create config item
+  // Find or create config item (Message)
   let configItem = currentPredictions.find((p) => p.condition === "__ITHINK__");
   if (configItem) {
     configItem.notes = message;
@@ -626,9 +657,24 @@ async function saveIThinkMessage() {
     });
   }
 
+  // Find or create config item (Title)
+  let titleItem = currentPredictions.find(
+    (p) => p.condition === "__ITHINK_TITLE__"
+  );
+  if (titleItem) {
+    titleItem.notes = title;
+  } else {
+    currentPredictions.push({
+      date: "2000-01-01",
+      temperature: "0",
+      condition: "__ITHINK_TITLE__",
+      notes: title,
+    });
+  }
+
   savePredictions(currentPredictions);
   await syncToSupabase(currentPredictions);
-  alert("Message updated successfully!");
+  alert("Message & Title updated successfully!");
 }
 
 // Load Target Date
@@ -689,18 +735,7 @@ async function handleHeaderImageSelect(event) {
     return;
   }
 
-  // Validate file size (500KB limit to prevent database bloat)
-  const maxSize = 500 * 1024; // 500KB
-  if (file.size > maxSize) {
-    alert(
-      `Image too large! Please select an image smaller than 500KB.\nSelected file: ${(
-        file.size / 1024
-      ).toFixed(0)}KB`
-    );
-    event.target.value = "";
-    if (fileChosenText) fileChosenText.textContent = "No file chosen";
-    return;
-  }
+
 
   if (fileChosenText)
     fileChosenText.textContent = `${file.name} (${(file.size / 1024).toFixed(
@@ -1354,6 +1389,22 @@ async function loadPredictionsForAdmin() {
   }
 }
 
+// Toggle forecast status (Approve/Reject)
+async function toggleForecastStatus(index) {
+  if (index >= 0 && index < currentPredictions.length) {
+    const p = currentPredictions[index];
+    // Toggle
+    p.isActive = !p.isActive;
+    
+    savePredictions(currentPredictions);
+    displayPredictionsInAdmin(currentPredictions);
+    await syncToSupabase(currentPredictions);
+    
+    const status = p.isActive ? "Approved ✅" : "Set to Pending ⏳";
+    console.log(`Admin: Forecast ${status}`);
+  }
+}
+
 // Display predictions
 function displayPredictionsInAdmin(predictions) {
   console.log("Admin: Displaying", predictions.length, "predictions");
@@ -1375,15 +1426,33 @@ function displayPredictionsInAdmin(predictions) {
   }
 
   displayList.forEach((pred, index) => {
+    // Determine status
+    const isActive = pred.isActive !== false; // Default true if undefined
+    const isPending = !isActive;
+
     const card = document.createElement("div");
     card.className = "admin-prediction-card";
+    
+    // Visual cue for pending
+    if (isPending) {
+        card.style.borderLeft = "4px solid #f59e0b"; // Orange for pending
+        card.style.background = "rgba(245, 158, 11, 0.1)";
+    }
 
     let dateRange = pred.date;
     if (pred.toDate) dateRange += ` to ${pred.toDate}`;
+    
+    // Status Badge
+    const statusBadge = isPending 
+        ? `<span style="background:#f59e0b;color:black;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:bold;margin-left:8px;">PENDING APPROVAL</span>`
+        : "";
+
+    // Calculate actual index in currentPredictions (since we are iterating over filtered list)
+    const actualIndex = predictions.indexOf(pred);
 
     card.innerHTML = `
             <div class="admin-pred-info">
-                <h4>${pred.condition}</h4>
+                <h4>${pred.condition} ${statusBadge}</h4>
                 <p><strong>Date:</strong> ${dateRange}</p>
                 <p><strong>Temperature:</strong> ${pred.temperature}°C</p>
                 ${pred.city ? `<p><strong>City:</strong> ${pred.city}</p>` : ""}
@@ -1398,14 +1467,102 @@ function displayPredictionsInAdmin(predictions) {
                     : ""
                 }
             </div>
-            ${
-              currentUserRole === "admin"
-                ? `<button class="delete-btn" onclick="deletePrediction(${index})">Delete</button>`
-                : ""
-            }
+            <div style="display:flex; flex-direction:column; gap:5px;">
+                ${
+                  currentUserRole === "admin" && isPending
+                    ? `<button class="approve-btn" onclick="toggleForecastStatus(${actualIndex})" style="background:#10b981;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;">✅ Approve</button>`
+                    : ""
+                }
+                 ${
+                  currentUserRole === "admin" && !isPending
+                    ? `<button class="reject-btn" onclick="toggleForecastStatus(${actualIndex})" style="background:#64748b;color:white;border:none;padding:5px 10px;border-radius:4px;cursor:pointer;font-size:0.8rem;">⏳ Un-Approve</button>`
+                    : ""
+                }
+                ${
+                  currentUserRole === "admin"
+                    ? `<button class="delete-btn" onclick="deletePrediction(${actualIndex})">Delete</button>`
+                    : ""
+                }
+                ${
+                  currentUserRole === "admin"
+                    ? `<button class="edit-btn" onclick="editPrediction(${actualIndex})" style="background:rgba(59, 130, 246, 0.1);color:#3b82f6;border:1px solid rgba(59, 130, 246, 0.2);padding:10px 20px;font-size:0.9rem;box-shadow:none;cursor:pointer;border-radius:12px;margin-top:5px;">✏️ Edit</button>`
+                    : ""
+                }
+            </div>
         `;
     container.appendChild(card);
   });
+}
+
+// Edit prediction
+function editPrediction(index) {
+  if (index >= 0 && index < currentPredictions.length) {
+    const pred = currentPredictions[index];
+    
+    // Populate form
+    document.getElementById("pred-date").value = pred.date;
+    document.getElementById("pred-to-date").value = pred.toDate || "";
+    document.getElementById("pred-temp").value = pred.temperature;
+    document.getElementById("pred-condition").value = pred.condition;
+    document.getElementById("pred-city").value = pred.city || "";
+    document.getElementById("pred-uploader").value = pred.uploader || "";
+    
+    // Handle notes - remove metadata tags from display if present
+    let displayNotes = pred.notes || "";
+    // Note: In syncToSupabase we add tags, but here we read from local `notes` property 
+    // which might already be clean if loaded from Supabase properly, 
+    // OR it might have raw content. 
+    // The load logic in initializePredictions cleans them, so pred.notes should be clean user logic.
+    document.getElementById("pred-notes").value = displayNotes;
+
+    // Set state
+    editingIndex = index;
+    
+    // Update UI
+    const addBtn = document.querySelector("#section-add button.btn-primary");
+    if(addBtn) addBtn.textContent = "Updates Forecast"; // Changed from Update to Updates as requested? No, "Update Forecast" is better English but user said "Update". Sticking to "Update Forecast" or "Update Prediction" for clarity.
+    
+    // Check if cancel button exists, if not create it
+    let cancelBtn = document.getElementById("btn-cancel-edit");
+    if (!cancelBtn) {
+        cancelBtn = document.createElement("button");
+        cancelBtn.id = "btn-cancel-edit";
+        cancelBtn.textContent = "Cancel Edit";
+        cancelBtn.className = "btn-secondary";
+        cancelBtn.style.marginTop = "10px";
+        cancelBtn.style.background = "rgba(239, 68, 68, 0.1)";
+        cancelBtn.style.color = "#ef4444";
+        cancelBtn.style.border = "1px solid rgba(239, 68, 68, 0.2)"; 
+        cancelBtn.onclick = cancelEdit;
+        addBtn.parentNode.insertBefore(cancelBtn, addBtn.nextSibling);
+    } else {
+        cancelBtn.style.display = "inline-block";
+    }
+
+    // Scroll to section
+    document.getElementById("section-add").scrollIntoView({ behavior: "smooth" });
+  }
+}
+
+// Cancel Edit
+function cancelEdit() {
+    editingIndex = -1;
+    
+    // Clear form
+    document.getElementById("pred-date").value = "";
+    document.getElementById("pred-to-date").value = "";
+    document.getElementById("pred-temp").value = "";
+    document.getElementById("pred-condition").value = "";
+    document.getElementById("pred-city").value = "";
+    document.getElementById("pred-uploader").value = "";
+    document.getElementById("pred-notes").value = "";
+    
+    // Reset UI
+    const addBtn = document.querySelector("#section-add button.btn-primary");
+    if(addBtn) addBtn.textContent = "Add Forecast";
+    
+    const cancelBtn = document.getElementById("btn-cancel-edit");
+    if (cancelBtn) cancelBtn.style.display = "none";
 }
 
 // Delete prediction
@@ -1513,7 +1670,7 @@ async function addPrediction() {
   }
 
   try {
-    const newPrediction = {
+    const predictionData = {
       date: date,
       temperature: temperature.trim(),
       condition: condition.trim(),
@@ -1521,33 +1678,43 @@ async function addPrediction() {
       uploader: uploader.trim() || undefined,
       city: city.trim() || undefined,
       notes: notes.trim() || undefined,
+      // If editing, keep original active state, otherwise default to true (or pending logic if added)
+      isActive: editingIndex !== -1 ? currentPredictions[editingIndex].isActive : true 
     };
 
-    currentPredictions.unshift(newPrediction);
+    if (editingIndex !== -1) {
+        // Update existing
+        currentPredictions[editingIndex] = predictionData;
+        console.log("Admin: Updated prediction at index", editingIndex);
+        alert("Forecast updated successfully!");
+        cancelEdit(); // Reset mode
+    } else {
+        // Add new
+        currentPredictions.push(predictionData);
+        // Track upload for users
+        if (currentUserRole === "user") {
+          userSessionUploadCount++;
+        }
+        console.log("Admin: Added new prediction");
+        alert("Forecast added successfully!");
+    }
+
     savePredictions(currentPredictions);
-
-    // Clear form
-    document.getElementById("pred-date").value = "";
-    document.getElementById("pred-to-date").value = "";
-    document.getElementById("pred-temp").value = "";
-    document.getElementById("pred-condition").value = "";
-    document.getElementById("pred-uploader").value = "";
-    document.getElementById("pred-city").value = "";
-    document.getElementById("pred-notes").value = "";
-
     displayPredictionsInAdmin(currentPredictions);
+
+    // Clear form (if not handled by cancelEdit)
+    if (editingIndex === -1) {
+        document.getElementById("pred-date").value = "";
+        document.getElementById("pred-to-date").value = "";
+        document.getElementById("pred-temp").value = "";
+        document.getElementById("pred-condition").value = "";
+        document.getElementById("pred-city").value = "";
+        document.getElementById("pred-uploader").value = "";
+        document.getElementById("pred-notes").value = "";
+    }
 
     // Sync to Supabase
     await syncToSupabase(currentPredictions);
-
-    // Increase user count if applicable
-    if (currentUserRole === "user") {
-      userSessionUploadCount++;
-      const remaining = USER_UPLOAD_LIMIT - userSessionUploadCount;
-      alert(`✅ Forecast added! (Remaining this session: ${remaining})`);
-    } else {
-      alert("✅ Forecast added successfully!");
-    }
   } catch (error) {
     console.error("Admin: Error adding forecast", error);
     alert("❌ Error adding forecast. Please try again.");

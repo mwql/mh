@@ -97,79 +97,158 @@ function hideTypingIndicator() {
 
 // 5. Call Gemini API
 async function callGeminiAPI(userPrompt) {
-    // A. Get API Key (localStorage fallback to default)
+    // A. Get API Key
     let apiKey = localStorage.getItem('geminiAIKey') || DEFAULT_GEMINI_KEY;
-    
-    // Try to find in sync predictions if not in localStorage
     const predictionsRaw = localStorage.getItem('weatherPredictions');
     if (predictionsRaw) {
         try {
             const predictions = JSON.parse(predictionsRaw);
             const geminiConfig = predictions.find(p => p.condition === '__GEMINI_CONFIG__');
-            if (geminiConfig && geminiConfig.notes) {
-                apiKey = geminiConfig.notes;
-            }
+            if (geminiConfig && geminiConfig.notes) apiKey = geminiConfig.notes;
         } catch (e) {}
     }
 
-    // B. Get Weather Context
+    // B. Get Weather Context (Local Data)
     const context = getWeatherContext();
-    
-    // C. Construct System Instruction (Conversational & Friendly)
-    const systemInstruction = `You are "Mahdawi AI", a friendly and helpful weather assistant for the "Mahdawi Weather" website.
-    
-    Your goal is to chat with the user naturally and answer their questions about the weather based on the official data below.
+
+    // C. Define Tools (Function Calling)
+    const tools = [{
+        function_declarations: [{
+            name: "get_weather",
+            description: "Get real-time weather for a specific city. Call this ONLY if the user asks for a city OUTSIDE of Kuwait or explicitly asks to 'use API'.",
+            parameters: {
+                type: "OBJECT",
+                properties: {
+                    city: { type: "STRING", description: "The city name (e.g. London, Paris)" }
+                },
+                required: ["city"]
+            }
+        }]
+    }];
+
+    // D. System Instruction
+    const systemInstruction = `You are "Mahdawi AI", a friendly weather assistant.
     
     Current Date: ${new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}.
     
-    OFFICIAL FORECAST DATA:
+    OFFICIAL LOCAL DATA (PRIORITY #1):
     ${context}
     
-    BEHAVIOR GUIDELINES:
-    1. **Be Conversational**: If the user says "Hello", "Hi", or asks "How are you?", reply warmly. You don't always have to talk about weather immediately.
-    2. **Use the Data**: When asked about the weather (e.g., "What's the weather tomorrow?", "Is it raining this week?"), look at the OFFICIAL FORECAST DATA above.
-       - If you find data for that date, summarize it clearly (Temperature, Condition, Notes).
-       - If you DO NOT find data for that date, simply say "I don't have a forecast for that specific day yet."
-    3. **Language**: Always reply in the same language the user speaks (Arabic or English).
-    4. **Tone**: Be polite, concise, and helpful. You can use emojis (🌤️, 🌧️) to make it friendly.
-    5. **Formatting**: You can use bolding for emphasis, but keep it clean.
+    BEHAVIOR:
+    1. **Check Local Data First**: Always look at the "OFFICIAL LOCAL DATA" above. If the user asks about Kuwait or general weather, use that data.
+    2. **Use API Only When Necessary**: 
+       - If the user asks for a specific city NOT in the local data (e.g. "Weather in London"), call the \`get_weather\` tool.
+       - If the user explicitly says "use the API", call the \`get_weather\` tool.
+    3. **Be Friendly**: Reply warmly to greetings.
+    4. **Jokes**: Tell weather jokes if asked.
+    5. **Language**: Match the user's language (Arabic/English).
     `;
 
-    // D. Prepare Payload
+    // E. Initial Chat Payload
+    // We send specific 'user' and 'model' turns to set the stage, then append history
+    // Note: Gemini API requires strict alternating roles in history. 
+    // We'll trust chatHistory is well-formed or simple append here.
+    
+    // Construct the full history including system prompt as first user message (Best practice for Flash model)
+    const fullHistory = [
+        { role: "user", parts: [{ text: systemInstruction }] },
+        { role: "model", parts: [{ text: "Understood. I will prioritize local data and use the tool for other cities." }] },
+        ...chatHistory
+    ];
+
     const payload = {
-        contents: [
-            {
-                role: "user",
-                parts: [{ text: systemInstruction }]
-            },
-            {
-                role: "model",
-                parts: [{ text: "Understood! I am ready to chat and help with weather updates." }]
-            },
-            ...chatHistory
-        ],
+        contents: fullHistory,
+        tools: tools,
         generationConfig: {
-            temperature: 0.9, // Higher temperature for more natural conversation
-            topK: 40,
-            topP: 0.95,
+            temperature: 0.7, 
             maxOutputTokens: 1024,
         }
     };
 
-    const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+    // F. First Turn: Call Gemini
+    let response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
         method: "POST",
-        headers: {
-            "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
     });
 
-    if (!response.ok) {
-        throw new Error(`API Error: ${response.status}`);
+    if (!response.ok) throw new Error(`API Error: ${response.status}`);
+    let data = await response.json();
+    let firstPart = data.candidates[0].content.parts[0];
+
+    // G. Check for Function Call
+    if (firstPart.functionCall) {
+        const fnName = firstPart.functionCall.name;
+        const args = firstPart.functionCall.args;
+        
+        if (fnName === "get_weather") {
+            const cityName = args.city;
+            addMessageToUI('ai', `🔎 Checking weather in ${cityName}...`); // Feedback to user
+            
+            // Execute Tool
+            const weatherResult = await executeGetWeather(cityName);
+            
+            // H. Second Turn: Send Function Response back to Gemini
+            const functionResponsePart = {
+                functionResponse: {
+                    name: "get_weather",
+                    response: {
+                        name: "get_weather",
+                        content: weatherResult 
+                    }
+                }
+            };
+            
+            // Append the model's function call and our response to history for this turn
+            const turnHistory = [...fullHistory];
+            // 1. Model's request
+            turnHistory.push(data.candidates[0].content); 
+            // 2. Our response
+            turnHistory.push({ role: "function", parts: [functionResponsePart] });
+
+            const secondPayload = {
+                contents: turnHistory,
+                tools: tools // Keep tools enabled (optional, but good for consistency)
+            };
+
+            const secondResponse = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(secondPayload)
+            });
+            
+            if (!secondResponse.ok) throw new Error("API Error on Function Response");
+            const secondData = await secondResponse.json();
+            return secondData.candidates[0].content.parts[0].text;
+        }
     }
 
-    const data = await response.json();
-    return data.candidates[0].content.parts[0].text;
+    // Default Text Return
+    return firstPart.text;
+}
+
+// 7. Execute Get Weather Tool
+async function executeGetWeather(city) {
+    try {
+        // Try to access the global function if available
+        if (window.fetchLiveWeatherForCity) {
+            const data = await window.fetchLiveWeatherForCity(city);
+            if(data) {
+                return { result: `Success: Weather in ${city} is ${data.temp}°C, ${data.desc}.` };
+            }
+        }
+        
+        // Fallback: Direct call if script.js isn't exposing it properly or fails
+        // We duplicates logic slightly just to be safe and robust
+        const key = "e89f102cfd638cfbd540bdf7fa673649"; // Default safe key
+        const r = await fetch(`https://api.openweathermap.org/data/2.5/weather?q=${encodeURIComponent(city)}&units=metric&appid=${key}`);
+        if(!r.ok) return { error: "City not found." };
+        const d = await r.json();
+        return { result: `Weather in ${d.name} is ${Math.round(d.main.temp)}°C, ${d.weather[0].description}.` };
+        
+    } catch (e) {
+        return { error: "Failed to fetch weather." };
+    }
 }
 
 // 6. Get Weather Context from Local Data

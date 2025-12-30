@@ -115,7 +115,8 @@ async function loadPredictions() {
                         condition: p.condition, 
                         notes: notes, 
                         uploader: uploader,
-                        city: city
+                        city: city,
+                        isActive: notes && notes.includes('{{active:false}}') ? false : true
                     };
                 });
                 
@@ -170,7 +171,8 @@ async function loadPredictions() {
                             condition: p.condition, 
                             notes: notes, 
                             uploader: uploader,
-                            city: city
+                            city: city,
+                            isActive: notes && notes.includes('{{active:false}}') ? false : true
                         };
                     });
                     localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
@@ -215,11 +217,13 @@ async function displayPredictions(predictions) {
     // Otherwise fall back to manual filtering.
     let actualForecasts = [];
     if (typeof window.getActualForecasts === 'function') {
-        actualForecasts = window.getActualForecasts(predictions);
+        // Must also filter for active status here
+        actualForecasts = window.getActualForecasts(predictions).filter(p => p.isActive !== false);
     } else {
         actualForecasts = predictions.filter(p => {
              const cond = (p.condition || '').trim();
-             return !cond.startsWith('__');
+             // Filter out Configs AND Pending Forecasts (isActive must not be false)
+             return !cond.startsWith('__') && p.isActive !== false;
         });
     }
 
@@ -350,8 +354,10 @@ async function displayPredictions(predictions) {
             else if (pred.condition.includes('Stormy')) icon = '⛈️';
             else if (pred.condition.includes('Snowy')) icon = '❄️';
             else if (pred.condition.includes('Windy')) icon = '💨';
+            else if (pred.condition.includes('Update')) icon = '👨🏻‍💻';
+            else if (pred.condition.includes('Clear')) icon = '';
             else if (pred.condition.includes('drasy') || pred.condition.includes('study')) icon = '📚';
-            else if (pred.condition.includes('3aly') || pred.condition.includes('famly') || pred.condition.includes('family')) icon = '👨‍👨‍👧‍👦';
+            else if (pred.condition.includes('3aily') || pred.condition.includes('family')) icon = '👨‍👨‍👧‍👦';
             
             // Normalize and parse date
             const normalizedDate = normalizeDate(pred.date);
@@ -451,6 +457,17 @@ async function initApp() {
             } else if (iThinkElement) {
                 iThinkElement.textContent = 'No message set';
                 iThinkElement.style.opacity = '0.6';
+            }
+
+            // Update "I Think" Title
+            const iThinkTitleConfig = predictions.find(p => p.condition === "__ITHINK_TITLE__");
+            const iThinkTitleElement = document.getElementById('i-think-title');
+            if (iThinkTitleElement) {
+                if (iThinkTitleConfig && iThinkTitleConfig.notes && iThinkTitleConfig.notes.trim() !== '') {
+                    iThinkTitleElement.textContent = iThinkTitleConfig.notes;
+                } else {
+                    iThinkTitleElement.textContent = 'i think'; // Default
+                }
             }
 
             // Update Header Image

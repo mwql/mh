@@ -5,6 +5,7 @@
 // Configuration Item Types (used in predictions array)
 export const CONFIG_TYPES = {
   ITHINK: "__ITHINK__",
+  ITHINK_TITLE: "__ITHINK_TITLE__",
   EXTERNAL_APIS: "__EXTERNAL_APIS__",
   ANALYTICS: "__ANALYTICS__",
   VIEW_LOG: "__VIEW_LOG__",
