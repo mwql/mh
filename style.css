@@ -640,14 +640,23 @@ footer {
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
+  position: relative;
+  cursor: pointer;
+  transition: all 0.2s;
+  overflow: hidden;
+}
+
+.calendar-day-content {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  position: relative;
-  cursor: pointer;
-  transition: all 0.2s;
-  overflow: hidden; /* Ensure nothing jumps out */
+  padding: 4px;
 }
 
 .calendar-day:hover {
@@ -694,21 +703,23 @@ footer {
     padding: 16px 10px; /* More space for the 7-col grid on mobile */
   }
   .calendar-day {
-    padding: 1px;
-    /* Removed min-height to maintain aspect-ratio square */
+    padding: 0; /* Content handled by absolute wrapper */
+  }
+  .calendar-day-content {
+    padding: 2px;
   }
   .day-icon {
-    font-size: 1rem;
+    font-size: 0.9rem;
     line-height: 1;
-    margin-top: 2px;
+    margin-top: 4px;
   }
   .day-temp {
-    font-size: 0.55rem;
-    margin-top: 0;
+    font-size: 0.5rem;
+    margin-top: 1px;
   }
   .day-number {
-    font-size: 0.5rem;
+    font-size: 0.45rem;
     top: 2px;
-    left: 3px;
+    left: 4px;
   }
 }
