@@ -20,7 +20,7 @@ const SB_SETTINGS_KEY = "supabaseSyncSettings";
 // Access Control State
 let currentUserRole = null; // 'admin' or 'user'
 let userSessionUploadCount = 0;
-const USER_UPLOAD_LIMIT = 2;
+const USER_UPLOAD_LIMIT = 3;
 const USER_API_LIMIT = 2; // Max 2 API cities for users
 
 // API Management State (Global to avoid TDZ)
@@ -316,6 +316,9 @@ async function syncToSupabase(predictions) {
         if (p.city) {
           noteContent += ` {{city:${p.city}}}`;
         }
+        if (p.severity && p.severity !== "normal") {
+          noteContent += ` {{severity:${p.severity}}}`;
+        }
 
         return {
           date: p.date,
@@ -459,6 +462,16 @@ async function initializePredictions() {
              notes = notes.replace("{{active:false}}", "").trim();
           }
 
+          // Extract severity
+          let severity = "normal";
+          if (notes && notes.includes("{{severity:")) {
+            const match = notes.match(/{{severity:(.*?)}}/);
+            if (match) {
+              severity = match[1];
+              notes = notes.replace(match[0], "").trim();
+            }
+          }
+
           return {
             date: p.date,
             toDate: p.to_date,
@@ -468,6 +481,7 @@ async function initializePredictions() {
             uploader: uploader,
             city: city, // preserved
             isActive: isActive, // New Field
+            severity: severity, // New Field
           };
         });
         localStorage.setItem(
@@ -1447,12 +1461,21 @@ function displayPredictionsInAdmin(predictions) {
         ? `<span style="background:#f59e0b;color:black;padding:2px 6px;border-radius:4px;font-size:0.75rem;font-weight:bold;margin-left:8px;">PENDING APPROVAL</span>`
         : "";
 
+    // Severity Badge
+    let severityBadge = "";
+    if (pred.severity && pred.severity !== "normal") {
+        let bgColor = "#64748b"; // default notice
+        if (pred.severity === "urgent") bgColor = "#f59e0b";
+        if (pred.severity === "danger") bgColor = "#ef4444";
+        severityBadge = `<span style="background:${bgColor};color:white;padding:2px 6px;border-radius:4px;font-size:0.65rem;font-weight:bold;margin-left:5px;text-transform:uppercase;">${pred.severity}</span>`;
+    }
+
     // Calculate actual index in currentPredictions (since we are iterating over filtered list)
     const actualIndex = predictions.indexOf(pred);
 
     card.innerHTML = `
             <div class="admin-pred-info">
-                <h4>${pred.condition} ${statusBadge}</h4>
+                <h4>${pred.condition} ${statusBadge} ${severityBadge}</h4>
                 <p><strong>Date:</strong> ${dateRange}</p>
                 <p><strong>Temperature:</strong> ${pred.temperature}°C</p>
                 ${pred.city ? `<p><strong>City:</strong> ${pred.city}</p>` : ""}
@@ -1504,6 +1527,7 @@ function editPrediction(index) {
     document.getElementById("pred-to-date").value = pred.toDate || "";
     document.getElementById("pred-temp").value = pred.temperature;
     document.getElementById("pred-condition").value = pred.condition;
+    document.getElementById("pred-severity").value = pred.severity || "normal";
     document.getElementById("pred-city").value = pred.city || "";
     document.getElementById("pred-uploader").value = pred.uploader || "";
     
@@ -1553,6 +1577,7 @@ function cancelEdit() {
     document.getElementById("pred-to-date").value = "";
     document.getElementById("pred-temp").value = "";
     document.getElementById("pred-condition").value = "";
+    document.getElementById("pred-severity").value = "normal";
     document.getElementById("pred-city").value = "";
     document.getElementById("pred-uploader").value = "";
     document.getElementById("pred-notes").value = "";
@@ -1615,6 +1640,7 @@ async function addPrediction() {
   const toDate = document.getElementById("pred-to-date").value;
   const temperature = document.getElementById("pred-temp").value;
   const condition = document.getElementById("pred-condition").value;
+  const severity = document.getElementById("pred-severity").value;
   const uploader = document.getElementById("pred-uploader").value;
   const city = document.getElementById("pred-city").value;
   const notes = document.getElementById("pred-notes").value;
@@ -1674,6 +1700,7 @@ async function addPrediction() {
       date: date,
       temperature: temperature.trim(),
       condition: condition.trim(),
+      severity: severity,
       toDate: toDate || undefined,
       uploader: uploader.trim() || undefined,
       city: city.trim() || undefined,
@@ -1708,6 +1735,7 @@ async function addPrediction() {
         document.getElementById("pred-to-date").value = "";
         document.getElementById("pred-temp").value = "";
         document.getElementById("pred-condition").value = "";
+        document.getElementById("pred-severity").value = "normal";
         document.getElementById("pred-city").value = "";
         document.getElementById("pred-uploader").value = "";
         document.getElementById("pred-notes").value = "";

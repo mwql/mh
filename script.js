@@ -116,8 +116,16 @@ async function loadPredictions() {
                         notes: notes, 
                         uploader: uploader,
                         city: city,
-                        isActive: notes && notes.includes('{{active:false}}') ? false : true
+                        isActive: notes && notes.includes('{{active:false}}') ? false : true,
+                        severity: notes && notes.includes('{{severity:') ? notes.match(/{{severity:(.*?)}}/)[1] : 'normal'
                     };
+                });
+                
+                // Clean notes from tags for display
+                normalizedData.forEach(p => {
+                    if (p.notes) {
+                        p.notes = p.notes.replace(/{{active:false}}/, '').replace(/{{severity:.*?}}/, '').trim();
+                    }
                 });
                 
                 localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
@@ -172,8 +180,16 @@ async function loadPredictions() {
                             notes: notes, 
                             uploader: uploader,
                             city: city,
-                            isActive: notes && notes.includes('{{active:false}}') ? false : true
+                            isActive: notes && notes.includes('{{active:false}}') ? false : true,
+                            severity: notes && notes.includes('{{severity:') ? notes.match(/{{severity:(.*?)}}/)[1] : 'normal'
                         };
+                    });
+
+                    // Clean notes
+                    normalizedData.forEach(p => {
+                        if (p.notes) {
+                            p.notes = p.notes.replace(/{{active:false}}/, '').replace(/{{severity:.*?}}/, '').trim();
+                        }
                     });
                     localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
                     return normalizedData;
@@ -507,6 +523,12 @@ async function initApp() {
             }
 
             displayPredictions(predictions);
+            
+            // Check for Urgent Alerts
+            renderAlertTicker(predictions);
+
+            // Render Calendar
+            renderCalendarView(predictions);
         } catch (err) {
             console.error("Error in loadAndDisplayPredictions:", err);
             
@@ -538,6 +560,143 @@ async function initApp() {
             }
         });
     }
+}
+
+// ----------------------------------
+// Render Alert Ticker
+// ----------------------------------
+function renderAlertTicker(predictions) {
+    const container = document.getElementById('alert-ticker-container');
+    const tickerText = document.getElementById('alert-ticker-text');
+    
+    if (!container || !tickerText) return;
+    
+    // Find all active alerts
+    const alerts = predictions.filter(p => p.isActive !== false && p.severity && p.severity !== 'normal');
+    
+    if (alerts.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+    
+    // Determine highest severity
+    let highestSeverity = 'notice';
+    if (alerts.some(a => a.severity === 'danger')) highestSeverity = 'danger';
+    else if (alerts.some(a => a.severity === 'urgent')) highestSeverity = 'urgent';
+    
+    // Construct message
+    const message = alerts.map(a => {
+        const icon = a.severity === 'danger' ? '⚠️' : (a.severity === 'urgent' ? '🚨' : 'ℹ️');
+        return `${icon} ${a.condition.toUpperCase()}: ${a.notes || 'Take precautions.'}`;
+    }).join(' | ');
+    
+    tickerText.textContent = `*** BREAKING WEATHER NEWS *** ${message} *** FOLLOW UPDATES *** `;
+    
+    // Add severity class
+    container.className = '';
+    if (highestSeverity === 'danger') container.classList.add('ticker-danger');
+    else if (highestSeverity === 'urgent') container.classList.add('ticker-urgent');
+    
+    container.style.display = 'block';
+}
+
+// ----------------------------------
+// Switch View (List / Calendar)
+// ----------------------------------
+window.switchView = function(view) {
+    const list = document.getElementById('predictions-list');
+    const calendar = document.getElementById('predictions-calendar');
+    const btnList = document.getElementById('btn-list-view');
+    const btnGrid = document.getElementById('btn-grid-view');
+    
+    if (!list || !calendar || !btnList || !btnGrid) return;
+    
+    if (view === 'list') {
+        list.style.display = 'grid';
+        calendar.style.display = 'none';
+        btnList.classList.add('active');
+        btnGrid.classList.remove('active');
+    } else {
+        list.style.display = 'none';
+        calendar.style.display = 'grid';
+        btnList.classList.remove('active');
+        btnGrid.classList.add('active');
+    }
+}
+
+// ----------------------------------
+// Render Calendar View
+// ----------------------------------
+function renderCalendarView(predictions) {
+    const calendar = document.getElementById('predictions-calendar');
+    if (!calendar) return;
+    calendar.innerHTML = '';
+    
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    
+    // Days in current month
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    
+    // Get actual forecasts only
+    const actualForecasts = predictions.filter(p => p.isActive !== false && !p.condition.startsWith('__'));
+    
+    for (let day = 1; day <= daysInMonth; day++) {
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        // Find if this day has a forecast
+        const dayForecast = actualForecasts.find(p => p.date === dateStr);
+        
+        const dayDiv = document.createElement('div');
+        dayDiv.className = 'calendar-day';
+        if (dayForecast) dayDiv.classList.add('has-forecast');
+        if (day === now.getDate()) dayDiv.classList.add('today');
+        
+        dayDiv.innerHTML = `
+            <span class="day-number">${day}</span>
+            ${dayForecast ? `
+                <span class="day-icon">${getCalendarIcon(dayForecast.condition)}</span>
+                <span class="day-temp">${Math.round(parseFloat(dayForecast.temperature))}°</span>
+            ` : ''}
+        `;
+        
+        if (dayForecast) {
+            dayDiv.title = `${dayForecast.condition} - ${dayForecast.temperature}°C`;
+            dayDiv.onclick = () => {
+                switchView('list');
+                // Find and scroll to the prediction card if needed
+                const cards = document.querySelectorAll('.prediction-card');
+                for (let card of cards) {
+                    if (card.textContent.includes(dayForecast.condition) && card.textContent.includes(dayForecast.temperature)) {
+                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        card.style.borderColor = 'var(--primary-color)';
+                        card.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
+                        setTimeout(() => {
+                           card.style.borderColor = '';
+                           card.style.boxShadow = '';
+                        }, 2000);
+                        break;
+                    }
+                }
+            };
+        }
+        
+        calendar.appendChild(dayDiv);
+    }
+}
+
+// Helper: Simple Icon Picker for Calendar
+function getCalendarIcon(condition) {
+    const c = condition.toLowerCase();
+    if (c.includes('sun') || c.includes('clear')) return '☀️';
+    if (c.includes('cloud')) return '☁️';
+    if (c.includes('rain') || c.includes('shower')) return '🌧️';
+    if (c.includes('storm') || c.includes('thunder')) return '⛈️';
+    if (c.includes('dust') || c.includes('sand')) return '🌪️';
+    if (c.includes('fog') || c.includes('mist')) return '🌫️';
+    if (c.includes('snow') || c.includes('ice')) return '❄️';
+    return '⛅'; // Default
 }
 
 // Start as early as possible
