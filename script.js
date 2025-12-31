@@ -654,11 +654,12 @@ function renderCalendarView(predictions) {
         if (day === now.getDate()) dayDiv.classList.add('today');
         
         dayDiv.innerHTML = `
-            <span class="day-number">${day}</span>
-            ${dayForecast ? `
-                <span class="day-icon">${getCalendarIcon(dayForecast.condition)}</span>
-                <span class="day-temp">${Math.round(parseFloat(dayForecast.temperature))}°</span>
-            ` : ''}
+            <div class="calendar-day-content">
+                <span class="day-number">${day}</span>
+                ${dayForecast ? `
+                    <span class="day-icon">${getCalendarIcon(dayForecast.condition)}</span>
+                ` : ''}
+            </div>
         `;
         
         if (dayForecast) {
