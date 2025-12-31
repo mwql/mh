@@ -1790,6 +1790,12 @@ async function loadThemeSettings() {
       if (theme.glassBg) r.style.setProperty("--glass-bg", theme.glassBg);
       if (theme.glassBorder)
         r.style.setProperty("--glass-border", theme.glassBorder);
+
+      // Update browser theme color
+      if (theme.bg) {
+        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+        if (metaThemeColor) metaThemeColor.setAttribute('content', theme.bg);
+      }
     } catch (e) {
       console.error("Error parsing theme config", e);
     }
@@ -1834,6 +1840,10 @@ async function saveThemeSettings() {
   r.style.setProperty("--card-border", theme.cardBorder);
   r.style.setProperty("--glass-bg", theme.glassBg);
   r.style.setProperty("--glass-border", theme.glassBorder);
+
+  // Update browser theme color
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) metaThemeColor.setAttribute('content', theme.bg);
 
   savePredictions(currentPredictions);
   await syncToSupabase(currentPredictions);
@@ -1887,6 +1897,10 @@ async function resetThemeSettings() {
   r.style.removeProperty("--card-border");
   r.style.removeProperty("--glass-bg");
   r.style.removeProperty("--glass-border");
+
+  // Reset browser theme color to default
+  const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+  if (metaThemeColor) metaThemeColor.setAttribute('content', "#0c0c14");
 
   savePredictions(currentPredictions);
   await syncToSupabase(currentPredictions);

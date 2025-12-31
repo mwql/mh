@@ -497,6 +497,12 @@ async function initApp() {
                     if(theme.cardBorder) r.style.setProperty('--card-border', theme.cardBorder);
                     if(theme.glassBg) r.style.setProperty('--glass-bg', theme.glassBg);
                     if(theme.glassBorder) r.style.setProperty('--glass-border', theme.glassBorder);
+                    
+                    // Update browser theme color
+                    if(theme.bg) {
+                        const metaThemeColor = document.querySelector('meta[name="theme-color"]');
+                        if (metaThemeColor) metaThemeColor.setAttribute('content', theme.bg);
+                    }
                 } catch(e) {}
             }
 
