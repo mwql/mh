@@ -631,12 +631,12 @@ footer {
   grid-template-columns: repeat(7, 1fr);
   gap: 8px;
   margin-top: 20px;
+  width: 100%;
 }
 
 .calendar-day {
-  aspect-ratio: 1;
-  min-width: 0; /* Prevent content from pushing width */
-  min-height: 0; /* Prevent content from pushing height */
+  width: 100%;
+  aspect-ratio: 1 / 1;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid var(--glass-border);
   border-radius: 8px;
@@ -682,6 +682,7 @@ footer {
   font-weight: 700;
   color: var(--primary-color);
   margin-top: 2px;
+  line-height: 1;
 }
 
 /* Mobile adjustments for calendar */
@@ -689,19 +690,24 @@ footer {
   .calendar-grid {
     gap: 4px;
   }
+  .predictions-list-section {
+    padding: 16px 10px; /* More space for the 7-col grid on mobile */
+  }
   .calendar-day {
-    padding: 2px;
-    min-height: 45px; /* Ensure a minimum touch target and size */
+    padding: 1px;
+    /* Removed min-height to maintain aspect-ratio square */
   }
   .day-icon {
-    font-size: 1.1rem;
+    font-size: 1rem;
     line-height: 1;
+    margin-top: 2px;
   }
   .day-temp {
-    font-size: 0.6rem;
+    font-size: 0.55rem;
+    margin-top: 0;
   }
   .day-number {
-    font-size: 0.55rem;
+    font-size: 0.5rem;
     top: 2px;
     left: 3px;
   }
