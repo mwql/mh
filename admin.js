@@ -972,24 +972,26 @@ async function loadHeaderLibrary() {
       const borderStyle = isActive ? "border: 2px solid #10b981;" : "";
       if (isActive) item.style.border = "2px solid #10b981";
 
-      // Only admin can activate images, users can only delete
-      const activateBtn =
-        currentUserRole === "admin"
-          ? `<button onclick="activateHeaderAsset(${index})" title="Use This" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">✅</button>`
-          : "";
+      // Only admin can activate or delete images
+const activateBtn =
+  currentUserRole === "admin"
+    ? `<button onclick="activateHeaderAsset(${index})" title="Use This" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">✅</button>`
+    : "";
 
-      item.innerHTML = `
-                <img src="${
-                  asset.notes
-                }" style="width: 100%; height: 100%; object-fit: cover;">
-                <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: ${
-                  currentUserRole === "admin" ? "space-between" : "center"
-                }; padding: 5px; z-index: 10;">
-                    ${activateBtn}
-                    <button onclick="deleteHeaderAsset(${index})" title="Delete" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">🗑️</button>
-                </div>
-            `;
-      grid.appendChild(item);
+const deleteBtn =
+  currentUserRole === "admin"
+    ? `<button onclick="deleteHeaderAsset(${index})" title="Delete" style="background: none; border: none; font-size: 1.2rem; cursor: pointer; padding: 0;">🗑️</button>`
+    : "";
+
+item.innerHTML = `
+    <img src="${asset.notes}" style="width: 100%; height: 100%; object-fit: cover;">
+    <div style="position: absolute; bottom: 0; left: 0; right: 0; background: rgba(0,0,0,0.7); display: flex; justify-content: space-around; padding: 5px; z-index: 10;">
+        ${activateBtn}
+        ${deleteBtn}
+    </div>
+`;
+grid.appendChild(item);
+
     });
   }
 }
@@ -1934,3 +1936,4 @@ async function resetThemeSettings() {
   await syncToSupabase(currentPredictions);
   alert("Theme reset to default.");
 }
+
