@@ -1,4 +1,4 @@
-const CACHE_NAME = 'mahdawi-weather-v2';
+const CACHE_NAME = 'mahdawi-weather-v2.3.1';
 const ASSETS = [
   'index.html',
   'other.html',
