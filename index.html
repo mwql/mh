@@ -131,14 +131,49 @@
             </div>
         </section>
         
-        <h6 style="text-align: center; color:var(--text-muted); font-size: 0.75rem; margin-top: 10px; margin-bottom: 20px;">كل التوقعات الجوية صادرة من محللين خبراء بالمجال</h6>
+        <section class="section-panel voice-card-section" id="voice-management-card">
+            <div class="voice-card-header">
+                <h3><span>🎤</span> Voice Control & Library</h3>
+                <p>Record, upload, and share sounds with the community.</p>
+            </div>
+
+            <div class="voice-controls">
+                <div class="voice-actions-row">
+                    <button id="btn-record" class="action-btn record-btn"><span>🎤</span> Start Recording</button>
+                    <button id="btn-stop-record" class="action-btn stop-btn" style="display: none;"><span>⏹️</span> Stop & Preview</button>
+                    <button id="btn-upload-trigger" class="action-btn upload-btn"><span>📁</span> Upload Audio</button>
+                    <input type="file" id="voice-file-input" style="display: none;" accept=".mp3,.wav,.m4a,.ogg,audio/*">
+                </div>
+                
+                <div id="voice-status" class="voice-status-indicator" style="display: none;">Ready</div>
+
+                <div id="voice-upload-form" class="voice-upload-overlay" style="display: none;">
+                    <div class="upload-form-content">
+                        <input type="text" id="voice-name" placeholder="Name this sound..." class="voice-input">
+                        <button id="btn-save-voice" class="action-btn save-btn">💾 Share to Global Library</button>
+                    </div>
+                </div>
+
+                <div class="voice-divider"></div>
+
+                <div class="library-controls">
+                    <div class="select-wrapper">
+                        <select id="voice-select" class="voice-select">
+                            <option value="">Select a shared sound...</option>
+                        </select>
+                    </div>
+                    <button id="btn-play-voice" class="action-btn play-btn"><span>▶️</span> Play Sound</button>
+                    <button onclick="stopVoiceUser()" class="action-btn" style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);"><span>⏹️</span> Stop</button>
+                </div>
+            </div>
+        </section>
 
         <footer class="section-panel" style="text-align: center; display: flex; flex-direction: column; align-items: center; gap: 15px;">
             <div style="display: flex; justify-content: center; gap: 20px; width: 100%;">
                 <a href="other.html" class="link-secondary">See what others are saying &rarr;</a>
                 <a href="admin.html" class="link-secondary" style="opacity: 0.5;">Admin Access &rarr;</a>
             </div>
-            <p id="site-version" style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.4; margin: 0;">v2.1 (Local-First)</p>
+            <p id="site-version" style="font-size: 0.65rem; color: var(--text-muted); opacity: 0.4; margin: 0;">v2.3.1 (Local-First)</p>
         </footer>
     </div>
 
@@ -158,7 +193,7 @@
             <button class="close-btn" onclick="toggleChatbot()">&times;</button>
         </div>
         <div id="chat-messages">
-            <div class="message ai">سلام, انا المساعد للارصاد المهدوية, اذا احتجت شي انا موجود😶</div>
+            <div class="message ai">سلام, انا المساعد للارصاد المهدوية, اذا احتجت شي عبدك موجود🙏🏿🙏🏿🤲🏿</div>
         </div>
         <div class="chat-input-area">
             <input type="text" id="chat-input" placeholder="Type your message..." onkeypress="if(event.key === 'Enter') sendChatMessage()">
@@ -170,10 +205,10 @@
         </div>
     </div>
 
-    <script type="module" src="config.js"></script>
-    <script src="analytics.js"></script>
-    <script src="script.js"></script>
-    <script src="chatbot.js"></script>
+    <script type="module" src="config.js" defer></script>
+    <script src="analytics.js" defer></script>
+    <script src="script.js" defer></script>
+    <script src="chatbot.js" defer></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {

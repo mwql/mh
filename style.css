@@ -723,3 +723,196 @@ footer {
     left: 4px;
   }
 }
+/* Standalone Voice Card Styles */
+.voice-card-section {
+    padding: 32px !important;
+    border: 1px solid rgba(59, 130, 246, 0.2) !important;
+    position: relative;
+    overflow: hidden;
+}
+
+.voice-card-header {
+    margin-bottom: 24px;
+    text-align: center;
+}
+
+.voice-card-header h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: white;
+}
+
+.voice-card-header p {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+}
+
+.voice-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    align-items: center;
+}
+
+.voice-actions-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+}
+
+.action-btn {
+    padding: 12px 24px;
+    border-radius: 14px;
+    font-weight: 700;
+    font-size: 0.9rem;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.action-btn:hover {
+    transform: translateY(-3px) scale(1.02);
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+}
+
+.record-btn {
+    background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+.record-btn:hover {
+    box-shadow: 0 0 20px rgba(239, 68, 68, 0.4);
+}
+
+.stop-btn {
+    background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+    border-color: rgba(245, 158, 11, 0.3);
+}
+
+.upload-btn {
+    background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+    border-color: rgba(99, 102, 241, 0.3);
+}
+.upload-btn:hover {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+}
+
+.play-btn {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    border-color: rgba(59, 130, 246, 0.3);
+}
+.play-btn:hover {
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+}
+
+.save-btn {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    border-color: rgba(16, 185, 129, 0.3);
+    width: 100%;
+}
+.save-btn:hover {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.4);
+}
+
+.voice-status-indicator {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: #ffffff;
+    padding: 10px 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    display: inline-block;
+    width: fit-content;
+    text-align: center;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.6; }
+    50% { opacity: 1; }
+    100% { opacity: 0.6; }
+}
+
+.voice-divider {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
+    width: 100%;
+}
+
+.library-controls {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+}
+
+.select-wrapper {
+    flex: 1;
+    position: relative;
+}
+
+.voice-select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-family: inherit;
+    outline: none;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
+.voice-select:focus {
+    border-color: var(--primary-color);
+}
+
+.voice-upload-overlay {
+    background: rgba(0, 0, 0, 0.4);
+    padding: 20px;
+    border-radius: 16px;
+    border: 1px solid var(--glass-border);
+}
+
+.upload-form-content {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.voice-input {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--glass-border);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 12px;
+    outline: none;
+}
+
+@media (max-width: 600px) {
+    .voice-actions-row {
+        flex-direction: column;
+    }
+    .action-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .library-controls {
+        flex-direction: column;
+    }
+}

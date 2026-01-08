@@ -425,7 +425,12 @@ async function initApp() {
     
     console.log("Mahdawi Weather: Initializing...");
     
-    // 1. Display "Today" on both pages immediately
+    // 1. Initialize Voice & Secondary Events (Crucial to do this before display)
+    if (typeof initVoiceEvents === 'function') {
+        initVoiceEvents();
+    }
+
+    // 2. Display "Today" on both pages immediately
     const inlineDateDisplay = document.getElementById('target-date-inline');
     const targetDateDisplay = document.getElementById('target-date-display');
     const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
@@ -636,16 +641,11 @@ function renderCalendarView(predictions) {
     const year = now.getFullYear();
     const month = now.getMonth();
     
-    // Days in current month
     const daysInMonth = new Date(year, month + 1, 0).getDate();
-    
-    // Get actual forecasts only
     const actualForecasts = predictions.filter(p => p.isActive !== false && !p.condition.startsWith('__'));
     
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        
-        // Find if this day has a forecast
         const dayForecast = actualForecasts.find(p => p.date === dateStr);
         
         const dayDiv = document.createElement('div');
@@ -656,9 +656,7 @@ function renderCalendarView(predictions) {
         dayDiv.innerHTML = `
             <div class="calendar-day-content">
                 <span class="day-number">${day}</span>
-                ${dayForecast ? `
-                    <span class="day-icon">${getCalendarIcon(dayForecast.condition)}</span>
-                ` : ''}
+                ${dayForecast ? `<span class="day-icon">${getCalendarIcon(dayForecast.condition)}</span>` : ''}
             </div>
         `;
         
@@ -666,39 +664,302 @@ function renderCalendarView(predictions) {
             dayDiv.title = `${dayForecast.condition} - ${dayForecast.temperature}°C`;
             dayDiv.onclick = () => {
                 switchView('list');
-                // Find and scroll to the prediction card if needed
                 const cards = document.querySelectorAll('.prediction-card');
                 for (let card of cards) {
-                    if (card.textContent.includes(dayForecast.condition) && card.textContent.includes(dayForecast.temperature)) {
+                    if (card.textContent.includes(dayForecast.condition)) {
                         card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        card.style.borderColor = 'var(--primary-color)';
-                        card.style.boxShadow = '0 0 20px rgba(59, 130, 246, 0.4)';
-                        setTimeout(() => {
-                           card.style.borderColor = '';
-                           card.style.boxShadow = '';
-                        }, 2000);
                         break;
                     }
                 }
             };
         }
-        
         calendar.appendChild(dayDiv);
     }
 }
 
-// Helper: Simple Icon Picker for Calendar
+// Helper: Icons for Calendar
 function getCalendarIcon(condition) {
     const c = condition.toLowerCase();
     if (c.includes('sun') || c.includes('clear')) return '☀️';
     if (c.includes('cloud')) return '☁️';
-    if (c.includes('rain') || c.includes('shower')) return '🌧️';
-    if (c.includes('storm') || c.includes('thunder')) return '⛈️';
-    if (c.includes('dust') || c.includes('sand')) return '🌪️';
-    if (c.includes('fog') || c.includes('mist')) return '🌫️';
-    if (c.includes('snow') || c.includes('ice')) return '❄️';
-    return '⛅'; // Default
+    if (c.includes('rain')) return '🌧️';
+    if (c.includes('storm')) return '⛈️';
+    return '⛅';
 }
+
+// =============================
+// VOICE FEATURE LOGIC
+// =============================
+
+let mediaRecorder;
+let audioChunks = [];
+let recordedAudioBase64 = null;
+let currentUserAudio = null;
+
+// Voice Panel visibility is now handled by standalone section
+window.toggleVoicePanel = function() {
+    const card = document.getElementById('voice-management-card');
+    if (card) {
+        card.scrollIntoView({ behavior: 'smooth' });
+    }
+};
+
+// Stop any currently playing audio
+window.stopVoiceUser = function() {
+    if (currentUserAudio) {
+        currentUserAudio.pause();
+        currentUserAudio.currentTime = 0;
+        currentUserAudio = null;
+        const btnPlayVoice = document.getElementById('btn-play-voice');
+        if (btnPlayVoice) btnPlayVoice.innerHTML = '<span>▶️</span> Play Sound';
+    }
+};
+
+async function loadSavedVoices() {
+    const select = document.getElementById('voice-select');
+    if (!select) return;
+    
+    // Fetch latest predictions
+    const predictions = await loadPredictions();
+    // Filter for voice assets that are NOT explicitly inactive
+    const voices = predictions.filter(p => 
+        p.condition === '__VOICE_ASSET__' && 
+        !p.notes?.includes('{{active:false}}')
+    );
+    
+    select.innerHTML = '<option value="">Select a shared sound...</option>';
+    
+    voices.forEach((v, index) => {
+        const opt = document.createElement('option');
+        opt.value = index;
+        // Data is stored in notes as "{{v:NAME}}BASE64"
+        const match = v.notes.match(/{{v:(.*?)}}/);
+        const name = match ? match[1] : `Sound ${index + 1}`;
+        opt.textContent = name;
+        select.appendChild(opt);
+    });
+    
+    // Keep local storage as a cache or fallback
+    window._cached_voices = voices;
+}
+
+// Initialize Voice Events
+function initVoiceEvents() {
+    console.log("Voice Initialization: START");
+    const btnRecord = document.getElementById('btn-record');
+    const btnStopRecord = document.getElementById('btn-stop-record');
+    const voiceStatus = document.getElementById('voice-status');
+    const uploadForm = document.getElementById('voice-upload-form');
+    const btnUploadTrigger = document.getElementById('btn-upload-trigger');
+    const fileInput = document.getElementById('voice-file-input');
+    const btnSaveVoice = document.getElementById('btn-save-voice');
+    const voiceNameInput = document.getElementById('voice-name');
+    const btnPlayVoice = document.getElementById('btn-play-voice');
+    const voiceSelect = document.getElementById('voice-select');
+
+    if (btnRecord && btnStopRecord) {
+        btnRecord.onclick = async () => {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                
+                // Detect supported MIME type for better cross-device compatibility (iOS support)
+                let options = {};
+                if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options = { mimeType: 'audio/mp4' };
+                } else if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+                    options = { mimeType: 'audio/webm;codecs=opus' };
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                audioChunks = [];
+
+                mediaRecorder.ondataavailable = (event) => {
+                    audioChunks.push(event.data);
+                };
+
+                mediaRecorder.onstop = async () => {
+                    const audioBlob = new Blob(audioChunks, { type: mediaRecorder.mimeType || 'audio/webm' });
+                    recordedAudioBase64 = await blobToBase64(audioBlob);
+                    voiceStatus.textContent = '✅ Recording captured!';
+                    uploadForm.style.display = 'flex';
+                };
+
+                mediaRecorder.start();
+                btnRecord.style.display = 'none';
+                btnStopRecord.style.display = 'flex';
+                voiceStatus.style.display = 'block';
+                voiceStatus.textContent = '🔴 Recording...';
+            } catch (err) {
+                console.error('Error accessing microphone:', err);
+                alert('Could not access microphone. Please ensure permissions are granted.');
+            }
+        };
+
+        btnStopRecord.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                btnRecord.style.display = 'flex';
+                btnStopRecord.style.display = 'none';
+            }
+        };
+    }
+
+    if (btnUploadTrigger && fileInput) {
+        btnUploadTrigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            // Stop any ongoing recording if user tries to upload
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                btnStopRecord.click();
+            }
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            console.log('Voice: File selected:', file.name, file.type, file.size);
+
+            if (file.size > 5 * 1024 * 1024) {
+                alert('File is too large! Please choose a file under 5MB.');
+                return;
+            }
+
+            voiceStatus.style.display = 'block';
+            voiceStatus.textContent = `📁 Selected: ${file.name}`;
+            
+            try {
+                const base64 = await blobToBase64(file);
+                recordedAudioBase64 = base64;
+                uploadForm.style.display = 'flex';
+                // Reset input so the same file can be selected again if needed
+                fileInput.value = '';
+            } catch (err) {
+                console.error('File read error:', err);
+                alert('Failed to read the audio file. Please try a different format.');
+            }
+        });
+    }
+
+    if (btnSaveVoice) {
+    btnSaveVoice.onclick = async () => {
+        const name = voiceNameInput.value.trim() || `Sound ${new Date().toLocaleTimeString()}`;
+        if (!recordedAudioBase64) return;
+
+        btnSaveVoice.disabled = true;
+        btnSaveVoice.textContent = '⏳ Uploading...';
+
+        const success = await postVoiceAsset(name, recordedAudioBase64);
+        
+        if (success) {
+            voiceNameInput.value = '';
+            uploadForm.style.display = 'none';
+            voiceStatus.textContent = '✨ Voice shared globally!';
+            recordedAudioBase64 = null;
+            await loadSavedVoices();
+        } else {
+            alert('Failed to share voice. Please try again.');
+        }
+        
+        btnSaveVoice.disabled = false;
+        btnSaveVoice.innerHTML = '💾 Save to Library';
+    };
+}
+
+if (btnPlayVoice && voiceSelect) {
+    btnPlayVoice.onclick = () => {
+        const index = voiceSelect.value;
+        if (index === '') {
+            alert('Please select a sound first!');
+            return;
+        }
+
+        const voices = window._cached_voices || [];
+        const voice = voices[index];
+        if (!voice) return;
+
+        // Strip ALL metadata tags recursively using global regex
+        const audioData = voice.notes.replace(/{{.*?}}/g, '');
+        
+        console.log("User: Playing audio, data length:", audioData.length);
+        console.log("User: Audio format starts with:", audioData.substring(0, 60));
+        
+        // Stop any currently playing audio
+        if (currentUserAudio) {
+            currentUserAudio.pause();
+        }
+        
+        try {
+            currentUserAudio = new Audio(audioData);
+            currentUserAudio.play().catch(e => {
+                console.error('Playback error:', e);
+                alert('Audio playback failed. The file might be corrupted or too large.');
+            });
+            
+            const originalText = btnPlayVoice.innerHTML;
+            btnPlayVoice.textContent = '🔊 Playing...';
+            currentUserAudio.onended = () => {
+                btnPlayVoice.innerHTML = originalText;
+                currentUserAudio = null;
+            };
+        } catch (e) {
+            alert('Could not play audio.');
+        }
+    };
+    loadSavedVoices();
+}
+}
+
+// Helper: Blob to Base64
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+// Helper: Post Voice to Supabase
+async function postVoiceAsset(name, base64) {
+    let url = window.SB_URL;
+    let key = window.SB_KEY;
+
+    if (!url || !key) {
+        console.error('Supabase keys missing');
+        return false;
+    }
+
+    try {
+        const payload = {
+            date: new Date().toISOString().split('T')[0],
+            temperature: '0',
+            condition: '__VOICE_ASSET__',
+            notes: `{{v:${name}}}{{active:true}}${base64}`
+        };
+
+        const response = await fetch(`${url.replace(/\/$/, '')}/rest/v1/predictions`, {
+            method: 'POST',
+            headers: {
+                'apikey': key,
+                'Authorization': `Bearer ${key}`,
+                'Content-Type': 'application/json',
+                'Prefer': 'return=minimal'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        return response.ok;
+    } catch (e) {
+        console.error('Error posting voice asset:', e);
+        return false;
+    }
+}
+
+// =============================
+// MAIN INITIALIZATION TRIGGER
+// =============================
 
 // Start as early as possible
 if (document.readyState === 'complete' || document.readyState === 'interactive') {

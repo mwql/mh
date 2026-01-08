@@ -70,6 +70,8 @@ window.removeApi = removeApi;
 window.debugAnalytics = debugAnalytics;
 window.saveThemeSettings = saveThemeSettings;
 window.resetThemeSettings = resetThemeSettings;
+window.toggleVoiceActive = toggleVoiceActive;
+window.deleteVoiceAsset = deleteVoiceAsset;
 
 // Load Supabase settings from localStorage
 function loadSupabaseSettings() {
@@ -619,13 +621,18 @@ function updateUIForRole() {
   if (listSection) listSection.style.display = "block";
   if (themeSection) themeSection.style.display = "block";
 
-  // User restrictions
+  // User restrictions (hide admin-only sections)
   if (currentUserRole === "user") {
     if (analytics) analytics.style.display = "none";
     if (settings) settings.style.display = "none";
     if (iThink) iThink.style.display = "none";
     if (targetDateSection) targetDateSection.style.display = "none";
     if (themeSection) themeSection.style.display = "none";
+    
+    // Hide Voice Management for non-admin users
+    const voiceSection = document.getElementById("section-voice-management");
+    if (voiceSection) voiceSection.style.display = "none";
+    
     // Keep 'Add', 'List', 'Header Image', and 'API' visible (with logic-based restrictions)
   }
 }
@@ -1006,6 +1013,7 @@ async function loadAdminData() {
   // await loadHeaderImage(); // Replaced
   loadHeaderLibrary(); // New loader
   loadApis();
+  loadVoiceManager(); // New: Load voice manager
   updateAnalytics();
   setInterval(updateAnalytics, 2000);
 }
@@ -1935,5 +1943,148 @@ async function resetThemeSettings() {
   savePredictions(currentPredictions);
   await syncToSupabase(currentPredictions);
   alert("Theme reset to default.");
+}
+
+// ========================
+// VOICE MANAGEMENT LOGIC
+// ========================
+
+async function loadVoiceManager() {
+  const container = document.getElementById("voice-admin-list");
+  if (!container) return;
+
+  container.innerHTML = '<p style="color: #888; text-align: center;">Loading voice library...</p>';
+
+  try {
+    // We already have currentPredictions loaded in loadAdminData
+    const voiceAssets = currentPredictions.filter(p => p.condition === "__VOICE_ASSET__");
+
+    if (voiceAssets.length === 0) {
+      container.innerHTML = '<p style="color: #888; text-align: center;">No voice recordings found.</p>';
+      return;
+    }
+
+    container.innerHTML = "";
+    
+    // Store voice data in a global cache for safe playback
+    window._admin_voice_cache = [];
+    
+    voiceAssets.forEach((v, index) => {
+      // Find index in global array for deletion/deactivation
+      const globalIndex = currentPredictions.indexOf(v);
+      
+      const match = v.notes?.match(/{{v:(.*?)}}/);
+      const name = match ? match[1] : `Sound ${index + 1}`;
+      const isActive = !v.notes?.includes("{{active:false}}");
+      const audioData = v.notes?.replace(/{{.*?}}/g, "");
+      
+      // Store clean audio data in cache
+      window._admin_voice_cache.push(audioData);
+      const cacheIndex = window._admin_voice_cache.length - 1;
+
+      const card = document.createElement("div");
+      card.className = "admin-prediction-card";
+      if (!isActive) {
+        card.style.opacity = "0.8";
+        card.style.borderLeft = "4px solid #ef4444";
+      }
+
+      card.innerHTML = `
+        <div class="admin-pred-info">
+          <h4>${name}</h4>
+          <p>Status: <strong style="color: ${isActive ? "#10b981" : "#ef4444"}">${isActive ? "Public" : "Hidden (Inactive)"}</strong></p>
+          <p>Date: ${v.date}</p>
+        </div>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button onclick="playVoiceAdmin(${cacheIndex})" style="background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.2); padding: 8px 12px; font-size: 0.8rem; border-radius: 8px;">▶️ Play</button>
+          <button onclick="stopVoiceAdmin()" style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); padding: 8px 12px; font-size: 0.8rem; border-radius: 8px; color: #ef4444;">⏹️ Stop</button>
+          <button onclick="toggleVoiceActive(${globalIndex})" style="background: ${isActive ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)'}; color: ${isActive ? '#f59e0b' : '#10b981'}; border: 1px solid ${isActive ? 'rgba(245, 158, 11, 0.2)' : 'rgba(16, 185, 129, 0.2)'}; padding: 8px 12px; font-size: 0.8rem; border-radius: 8px;">
+            ${isActive ? '⏸️ Deactivate' : '✅ Activate'}
+          </button>
+          <button onclick="deleteVoiceAsset(${globalIndex})" class="delete-btn" style="padding: 8px 12px; font-size: 0.8rem; border-radius: 8px;">🗑️ Delete</button>
+        </div>
+      `;
+      container.appendChild(card);
+    });
+
+  } catch (error) {
+    console.error("Admin: Error loading voice manager", error);
+    container.innerHTML = '<p style="color: #ef4444; text-align: center;">Error loading voice library.</p>';
+  }
+}
+
+// Global play function for admin (uses cached audio data)
+let currentAdminAudio = null;
+
+window.playVoiceAdmin = function(cacheIndex) {
+  try {
+    // Stop any currently playing audio
+    if (currentAdminAudio) {
+      currentAdminAudio.pause();
+      currentAdminAudio = null;
+    }
+    
+    const audioData = window._admin_voice_cache?.[cacheIndex];
+    if (!audioData) {
+      alert("Audio data not found. Please refresh the page.");
+      return;
+    }
+    
+    console.log("Admin: Playing audio, data length:", audioData.length);
+    
+    currentAdminAudio = new Audio(audioData);
+    currentAdminAudio.play().catch(e => {
+      console.error("Admin Playback error:", e);
+      alert("Could not play this audio. The format might not be supported.");
+    });
+    
+    currentAdminAudio.onended = () => {
+      currentAdminAudio = null;
+    };
+  } catch (e) {
+    console.error("Audio initialization error:", e);
+    alert("Audio initialization error");
+  }
+};
+
+window.stopVoiceAdmin = function() {
+  if (currentAdminAudio) {
+    currentAdminAudio.pause();
+    currentAdminAudio.currentTime = 0;
+    currentAdminAudio = null;
+  }
+};
+
+async function toggleVoiceActive(index) {
+  if (index < 0 || index >= currentPredictions.length) return;
+  const v = currentPredictions[index];
+
+  let notes = v.notes || "";
+  if (notes.includes("{{active:true}}")) {
+    notes = notes.replace("{{active:true}}", "{{active:false}}");
+  } else if (notes.includes("{{active:false}}")) {
+    notes = notes.replace("{{active:false}}", "{{active:true}}");
+  } else {
+    // legacy or missing tag
+    notes = notes.replace(/({{v:.*?}})/, "$1{{active:false}}");
+    if (!notes.includes("{{active:")) notes += "{{active:false}}";
+  }
+
+  v.notes = notes;
+  savePredictions(currentPredictions);
+  loadVoiceManager();
+  await syncToSupabase(currentPredictions);
+}
+
+async function deleteVoiceAsset(index) {
+  if (!confirm("Are you sure you want to permanently delete this voice recording?")) return;
+  
+  if (index >= 0 && index < currentPredictions.length) {
+    currentPredictions.splice(index, 1);
+    savePredictions(currentPredictions);
+    loadVoiceManager();
+    await syncToSupabase(currentPredictions);
+    alert("Voice recording deleted.");
+  }
 }
 
