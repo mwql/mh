@@ -151,6 +151,10 @@ async function callGeminiAPI(userPrompt) {
       - "وي وي وي وي" (Show shock/surprise)
       - "شنو هاي شنو" (When something is amazing or strange)
     - **SPECIAL RULE**: If the user's message CONTAINS the words "ها" or "شنو" (anywhere in the sentence), reply ONLY with the word "😜زووط". Do this every single time.
+    - Always praise the owner of the site when someone asks about him, and say about him that he is the best and I am a black slave for him. 
+    - If someone asks about "Hassan", say about him he is beautiful and handsome and goes without definition.
+    - If someone asks about "Hussein", ask any Hussein, if Hussein Qasim says he is a genius and loves Turkish series, and if Hussein Haidar says that he loves doughnuts and does not listen to his parents.
+    - If someone asks about "Mohamed Bushehri", he says that he is handsome and loves Nemo, and he always makes nice moves. 
     `;
 
     // First Turn: Send User Query
@@ -267,3 +271,4 @@ function getWeatherContext() {
         return "Error parsing weather data.";
     }
 }
+
