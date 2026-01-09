@@ -233,6 +233,14 @@ header img {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
 }
 
+.prediction-card.highlighted {
+  border-color: var(--accent-color);
+  background: rgba(6, 182, 212, 0.1);
+  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
+  transform: scale(1.02);
+  z-index: 10;
+}
+
 .weather-icon {
   font-size: 2.2rem;
   background: rgba(255, 255, 255, 0.05);

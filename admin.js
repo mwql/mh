@@ -72,6 +72,8 @@ window.saveThemeSettings = saveThemeSettings;
 window.resetThemeSettings = resetThemeSettings;
 window.toggleVoiceActive = toggleVoiceActive;
 window.deleteVoiceAsset = deleteVoiceAsset;
+window.deleteAllData = deleteAllData;
+window.clearForecastsOnly = clearForecastsOnly;
 
 // Load Supabase settings from localStorage
 function loadSupabaseSettings() {
@@ -250,8 +252,18 @@ async function testSupabaseConnection() {
 
 // Sync predictions to Supabase (Replacement: Weather-main Logic)
 async function syncToSupabase(predictions) {
+  // 1. Local Deduplication (Safety First)
+  // Ensure we don't sync duplicates that might have been added to the local array
+  const seen = new Set();
+  const dedupedPredictions = predictions.filter(p => {
+    // Unique key: date + condition + city + notes (notes might have binary data, so we hash or just stringify)
+    const key = `${p.date}|${p.condition}|${p.city || ''}|${p.notes || ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   // 1. Get credentials (Global first, then LocalStorage)
-  // Matches Weather-main approach but respects MH-weather's window globals if set
   let url = window.SB_URL;
   let key = window.SB_KEY;
 
@@ -281,19 +293,15 @@ async function syncToSupabase(predictions) {
   const lastStatus = document.getElementById("sync-last-status");
 
   try {
-    console.log("Admin: Syncing to Supabase (Weather-main Style)...");
+    console.log("Admin: Syncing to Supabase (Robust Mode)...");
     if (lastStatus) {
       lastStatus.textContent = "⏳ Syncing...";
       lastStatus.style.color = "#cbd5e1";
     }
 
-    // 1. Delete all existing records (PostgREST style: ?id=gt.0)
-    // Weather-main Logic: Delete everything.
-    // We add condition=neq.__VIEW_LOG__ ONLY if we want to save logs,
-    // BUT user asked for "same sync system of weather-main".
-    // Weather-main uses: ?id=gt.0 (Deletes ALL).
-    // I will use ?id=gt.0 to strictly follow instructions.
-    const deleteResponse = await fetch(`${requestUrl}?id=gt.0`, {
+    // 1. Delete all existing records
+    // Use condition=not.is.null instead of id=gt.0 for better reliability across different ID types
+    const deleteResponse = await fetch(`${requestUrl}?condition=not.is.null`, {
       method: "DELETE",
       headers: {
         apikey: key,
@@ -302,23 +310,23 @@ async function syncToSupabase(predictions) {
     });
 
     if (!deleteResponse.ok) {
-      const errorData = await deleteResponse.json();
+      const errorData = await deleteResponse.json().catch(() => ({ message: "Delete failed" }));
       throw new Error(errorData.message || "Failed to clear old predictions");
     }
 
     // 2. Insert new records
-    if (predictions.length > 0) {
+    if (dedupedPredictions.length > 0) {
       // Transform predictions for Supabase schema
-      const sbPredictions = predictions.map((p) => {
+      const sbPredictions = dedupedPredictions.map((p) => {
         let noteContent = p.notes || "";
-        // Embed metadata tags
-        if (p.uploader) {
+        // Embed metadata tags (ensure we don't double-embed if already present)
+        if (p.uploader && !noteContent.includes(`{{uploader:${p.uploader}}}`)) {
           noteContent += ` {{uploader:${p.uploader}}}`;
         }
-        if (p.city) {
+        if (p.city && !noteContent.includes(`{{city:${p.city}}}`)) {
           noteContent += ` {{city:${p.city}}}`;
         }
-        if (p.severity && p.severity !== "normal") {
+        if (p.severity && p.severity !== "normal" && !noteContent.includes(`{{severity:${p.severity}}}`)) {
           noteContent += ` {{severity:${p.severity}}}`;
         }
 
@@ -333,11 +341,14 @@ async function syncToSupabase(predictions) {
 
       // Handle inactive items logic
       const finalSbPredictions = sbPredictions.map((sbP, idx) => {
-        const originalP = predictions[idx];
-        if (originalP.isActive === false) { // Only explicitly false
+        const originalP = dedupedPredictions[idx];
+        if (originalP.isActive === false) { 
           const suffix = " {{active:false}}";
-          if (sbP.notes) sbP.notes += suffix;
-          else sbP.notes = suffix.trim();
+          if (sbP.notes) {
+            if (!sbP.notes.includes("{{active:false}}")) sbP.notes += suffix;
+          } else {
+            sbP.notes = suffix.trim();
+          }
         }
         return sbP;
       });
@@ -350,16 +361,20 @@ async function syncToSupabase(predictions) {
           "Content-Type": "application/json",
           Prefer: "return=minimal",
         },
-        body: JSON.stringify(finalSbPredictions), // Us final modified list
+        body: JSON.stringify(finalSbPredictions),
       });
 
       if (!insertResponse.ok) {
-        const errorData = await insertResponse.json();
+        const errorData = await insertResponse.json().catch(() => ({ message: "Insert failed" }));
         throw new Error(
           errorData.message || "Failed to insert new predictions"
         );
       }
     }
+
+    // Update local copy with deduped data
+    currentPredictions = dedupedPredictions;
+    savePredictions(currentPredictions);
 
     console.log("Admin: Supabase sync successful!");
     if (lastStatus) {
@@ -374,8 +389,6 @@ async function syncToSupabase(predictions) {
       lastStatus.textContent = `❌ Sync error: ${error.message}`;
       lastStatus.style.color = "#ef4444";
     }
-    // Don't alert if it's just a background sync failure, but log it
-    // showSyncStatus(`❌ ${error.message}`, "error");
     return false;
   }
 }
@@ -2085,6 +2098,65 @@ async function deleteVoiceAsset(index) {
     loadVoiceManager();
     await syncToSupabase(currentPredictions);
     alert("Voice recording deleted.");
+  }
+}
+
+// Delete ALL data
+async function deleteAllData() {
+  const confirm1 = confirm("⚠️ WARNING: This will permanently delete ALL forecasts, voices, and assets from the cloud and local storage. This cannot be undone. Proceed?");
+  if (!confirm1) return;
+
+  const confirm2 = confirm("🛑 FINAL WARNING: Are you absolutely sure? Everything will be lost.");
+  if (!confirm2) return;
+
+  try {
+      // 1. Clear Local State
+      currentPredictions = [];
+      savePredictions(currentPredictions);
+      
+      // 2. Clear UI
+      displayPredictionsInAdmin([]);
+      loadHeaderLibrary();
+      loadApis();
+      loadVoiceManager();
+      
+      // 3. Sync empty state to Supabase (Robust Sync handles the deletion)
+      const success = await syncToSupabase([]);
+      
+      if (success) {
+          alert("💥 All data has been purged successfully.");
+      } else {
+          alert("⚠️ Local data cleared, but cloud sync failed. Please check your Supabase connection.");
+      }
+  } catch (error) {
+      console.error("Admin: Error during purge", error);
+      alert("❌ Critical error during purge. Please refresh and try again.");
+  }
+}
+
+// Clear only Forecasts
+async function clearForecastsOnly() {
+  if (!confirm("Are you sure you want to delete ONLY the weather forecasts? Voices and settings will be preserved.")) return;
+
+  try {
+      // 1. Keep only config items and voice assets
+      // config.js helper matches everything that isn't a plain forecast
+      currentPredictions = currentPredictions.filter(p => isConfigItem(p));
+      
+      savePredictions(currentPredictions);
+      displayPredictionsInAdmin(currentPredictions);
+      
+      // 2. Sync to Supabase
+      const success = await syncToSupabase(currentPredictions);
+      
+      if (success) {
+          alert("✅ Weather forecasts cleared successfully. Voices and settings preserved.");
+      } else {
+          alert("⚠️ Local forecasts cleared, but cloud sync failed.");
+      }
+  } catch (error) {
+      console.error("Admin: Error clearing forecasts", error);
+      alert("❌ Error clearing forecasts. Please try again.");
   }
 }
 

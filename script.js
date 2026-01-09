@@ -54,25 +54,27 @@ async function fetchLiveWeatherForCity(cityName) {
 // ----------------------------------
 // Fetch predictions from Supabase (fallback to localStorage)
 // ----------------------------------
+// Helper to deduplicate predictions
+function deduplicatePredictions(predictions) {
+    const seen = new Set();
+    return (predictions || []).filter(p => {
+        const key = `${p.date}|${p.condition}|${p.city || ''}|${p.notes || ''}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
 // Fetch predictions from Supabase (fallback to localStorage)
 async function loadPredictions() {
+    let rawData = [];
+    
     // 1. Try to fetch from Supabase using global config (from analytics.js)
     let url = window.SB_URL;
     let key = window.SB_KEY;
     
-    // Also check for Hardcoded/Public config if strictly needed, but Weather-main logic simplifies this:
-    // Weather-main primarily checks Global Consts then LocalStorage.
-    // We will stick to Window Globals then LocalStorage.
-
     if (url && key) {
         try {
-            // Weather-main logic: ?order=date.desc (Simple)
-            // Removed condition=neq filters as per Weather-main style, 
-            // but for safety/cleanliness we usually want to avoid logs in the UI list.
-            // Weather-main's script.js actually fetches: .../predictions?order=date.desc
-            // and THEN filters: const actualForecasts = predictions.filter(...)
-            // I will match that.
-            
             const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/predictions?order=date.desc`;
             
             console.log('Fetching latest forecasts from Supabase...');
@@ -85,13 +87,13 @@ async function loadPredictions() {
             
             if (response.ok) {
                 const data = await response.json();
-                const normalizedData = data.map(p => {
+                rawData = data.map(p => {
                     let uploader = null;
                     let city = null;
-                    let notes = p.notes;
+                    let notes = p.notes || "";
                     
                     // Extract uploader from notes tag {{uploader:NAME}}
-                    if (notes && notes.includes('{{uploader:')) {
+                    if (notes.includes('{{uploader:')) {
                         const match = notes.match(/{{uploader:(.*?)}}/);
                         if (match) {
                             uploader = match[1];
@@ -99,11 +101,28 @@ async function loadPredictions() {
                         }
                     }
 
-                    // Extract city from notes tag {{city:NAME}} (MH-weather support)
-                    if (notes && notes.includes('{{city:')) {
+                    // Extract city from notes tag {{city:NAME}}
+                    if (notes.includes('{{city:')) {
                         const match = notes.match(/{{city:(.*?)}}/);
                         if (match) {
                             city = match[1];
+                            notes = notes.replace(match[0], '').trim();
+                        }
+                    }
+
+                    // Extract active state
+                    let isActive = true;
+                    if (notes.includes('{{active:false}}')) {
+                        isActive = false;
+                        notes = notes.replace('{{active:false}}', '').trim();
+                    }
+
+                    // Extract severity
+                    let severity = 'normal';
+                    if (notes.includes('{{severity:')) {
+                        const match = notes.match(/{{severity:(.*?)}}/);
+                        if (match) {
+                            severity = match[1];
                             notes = notes.replace(match[0], '').trim();
                         }
                     }
@@ -116,20 +135,14 @@ async function loadPredictions() {
                         notes: notes, 
                         uploader: uploader,
                         city: city,
-                        isActive: notes && notes.includes('{{active:false}}') ? false : true,
-                        severity: notes && notes.includes('{{severity:') ? notes.match(/{{severity:(.*?)}}/)[1] : 'normal'
+                        isActive: isActive,
+                        severity: severity
                     };
                 });
                 
-                // Clean notes from tags for display
-                normalizedData.forEach(p => {
-                    if (p.notes) {
-                        p.notes = p.notes.replace(/{{active:false}}/, '').replace(/{{severity:.*?}}/, '').trim();
-                    }
-                });
-                
-                localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
-                return normalizedData;
+                const deduped = deduplicatePredictions(rawData);
+                localStorage.setItem('weatherPredictions', JSON.stringify(deduped));
+                return deduped;
             }
         } catch (error) {
             console.error('Error fetching from Supabase:', error);
@@ -152,23 +165,34 @@ async function loadPredictions() {
                 });
                 if (response.ok) {
                     const data = await response.json();
-                    const normalizedData = data.map(p => {
+                    rawData = data.map(p => {
                         let uploader = null;
                         let city = null;
-                        let notes = p.notes;
+                        let notes = p.notes || "";
                         
-                        if (notes && notes.includes('{{uploader:')) {
+                        if (notes.includes('{{uploader:')) {
                             const match = notes.match(/{{uploader:(.*?)}}/);
                             if (match) {
                                 uploader = match[1];
                                 notes = notes.replace(match[0], '').trim();
                             }
                         }
-                        if (notes && notes.includes('{{city:')) {
+                        if (notes.includes('{{city:')) {
                             const match = notes.match(/{{city:(.*?)}}/);
                             if (match) {
                                 city = match[1];
                                 notes = notes.replace(match[0], '').trim();
+                            }
+                        }
+                        let isActive = !notes.includes('{{active:false}}');
+                        if (!isActive) notes = notes.replace('{{active:false}}', '').trim();
+                        
+                        let severity = 'normal';
+                        if (notes.includes('{{severity:')) {
+                            const sMatch = notes.match(/{{severity:(.*?)}}/);
+                            if (sMatch) {
+                                severity = sMatch[1];
+                                notes = notes.replace(sMatch[0], '').trim();
                             }
                         }
 
@@ -180,38 +204,36 @@ async function loadPredictions() {
                             notes: notes, 
                             uploader: uploader,
                             city: city,
-                            isActive: notes && notes.includes('{{active:false}}') ? false : true,
-                            severity: notes && notes.includes('{{severity:') ? notes.match(/{{severity:(.*?)}}/)[1] : 'normal'
+                            isActive: isActive,
+                            severity: severity
                         };
                     });
 
-                    // Clean notes
-                    normalizedData.forEach(p => {
-                        if (p.notes) {
-                            p.notes = p.notes.replace(/{{active:false}}/, '').replace(/{{severity:.*?}}/, '').trim();
-                        }
-                    });
-                    localStorage.setItem('weatherPredictions', JSON.stringify(normalizedData));
-                    return normalizedData;
+                    const deduped = deduplicatePredictions(rawData);
+                    localStorage.setItem('weatherPredictions', JSON.stringify(deduped));
+                    return deduped;
                 }
             }
         } catch (e) {}
     }
     
-    // Fallback to localStorage if offline, fetch fails, or no settings
+    // Fallback to localStorage
     const stored = localStorage.getItem('weatherPredictions');
     if (stored) {
         try {
-            return JSON.parse(stored);
+            return deduplicatePredictions(JSON.parse(stored));
         } catch (error) {
             console.error('Error parsing stored predictions:', error);
         }
     }
     
-    // Last fallback: static data.json (for initial load)
+    // Last fallback: static data.json
     try {
         const response = await fetch('data.json?t=' + Date.now());
-        if (response.ok) return await response.json();
+        if (response.ok) {
+            const staticData = await response.json();
+            return deduplicatePredictions(staticData);
+        }
     } catch (e) {}
 
     return [];
@@ -363,6 +385,10 @@ async function displayPredictions(predictions) {
             const card = document.createElement('div');
             card.className = 'prediction-card';
             
+            // Normalize and parse date
+            const normalizedDate = normalizeDate(pred.date);
+            card.setAttribute('data-date', normalizedDate);
+            
             let icon = '❓';
             if (pred.condition.includes('Sunny')) icon = '☀️';
             else if (pred.condition.includes('Cloudy')) icon = '☁️';
@@ -376,7 +402,6 @@ async function displayPredictions(predictions) {
             else if (pred.condition.includes('3aily') || pred.condition.includes('family')) icon = '👨‍👨‍👧‍👦';
             
             // Normalize and parse date
-            const normalizedDate = normalizeDate(pred.date);
             const dateObj = new Date(normalizedDate + 'T00:00:00');
             
             // English month names
@@ -662,14 +687,19 @@ function renderCalendarView(predictions) {
         
         if (dayForecast) {
             dayDiv.title = `${dayForecast.condition} - ${dayForecast.temperature}°C`;
-            dayDiv.onclick = () => {
+            dayDiv.onclick = (e) => {
+                e.stopPropagation(); // Prevent immediate clearing by global listener
                 switchView('list');
-                const cards = document.querySelectorAll('.prediction-card');
-                for (let card of cards) {
-                    if (card.textContent.includes(dayForecast.condition)) {
-                        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                        break;
-                    }
+                
+                // Remove existing highlights
+                document.querySelectorAll('.prediction-card.highlighted').forEach(c => c.classList.remove('highlighted'));
+                
+                const targetDate = normalizeDate(dayForecast.date);
+                const targetCard = document.querySelector(`.prediction-card[data-date="${targetDate}"]`);
+                
+                if (targetCard) {
+                    targetCard.classList.add('highlighted');
+                    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             };
         }
@@ -960,6 +990,13 @@ async function postVoiceAsset(name, base64) {
 // =============================
 // MAIN INITIALIZATION TRIGGER
 // =============================
+
+// Global click listener to clear highlights
+document.addEventListener('click', () => {
+    document.querySelectorAll('.prediction-card.highlighted').forEach(card => {
+        card.classList.remove('highlighted');
+    });
+});
 
 // Start as early as possible
 if (document.readyState === 'complete' || document.readyState === 'interactive') {
