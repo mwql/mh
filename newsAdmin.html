@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#0c0c14">
+    <meta name="color-scheme" content="dark light">
+    <title>News Admin - الارصاد المهدوية</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="icon" type="image/jpeg" href="favicon.jpg">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="news.css"> 
+    <!-- Using shared news.css -->
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>📰 News Administration</h1>
+            <p>Create and manage news articles.</p>
+            <div style="margin-top: 15px;">
+                <a href="admin.html" style="color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">&larr; Back to Dashboard</a>
+                <a href="news.html" style="margin-left: 20px; color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">Go to News &rarr;</a>
+            </div>
+        </div>
+
+        <!-- Add News Section -->
+        <div class="section">
+            <h2>➕ Add New Article</h2>
+            <form id="add-news-form">
+                <div class="form-group">
+                    <label for="news-title">Title</label>
+                    <input type="text" id="news-title" placeholder="Enter article title" required>
+                </div>
+                <div class="form-group">
+                    <label for="news-image">News Image</label>
+                    <input type="file" id="news-image" accept="image/*">
+                    <p style="font-size:0.8rem; color: var(--text-muted); margin-top:5px;">Select an image from your device.</p>
+                </div>
+                <div class="form-group">
+                    <label for="news-video">News Video (Optional)</label>
+                    <input type="file" id="news-video" accept="video/*">
+                    <p style="font-size:0.8rem; color: var(--text-muted); margin-top:5px;">Select a video (Max 50MB recommended).</p>
+                </div>
+                <div class="form-group">
+                    <label for="news-link">Related Link (Optional)</label>
+                    <input type="text" id="news-link" placeholder="https://example.com/article">
+                </div>
+                <div class="form-group">
+                    <label for="news-content">Content</label>
+                    <textarea id="news-content" placeholder="Enter article content..." required></textarea>
+                <div class="form-group">
+                    <label for="publish-pin">Publish PIN</label>
+                    <input type="password" id="publish-pin" placeholder="Enter Publish PIN" autocomplete="new-password" required>
+                </div>
+                <button type="button" id="btn-add-news" class="btn-primary">Publish News</button>
+            </form>
+        </div>
+
+        <!-- Existing News Section -->
+        <!-- Existing News Section -->
+        <div class="section">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h2>📋 Existing News</h2>
+                <button id="btn-clear-all" class="btn-danger" style="font-size:0.9rem;">🗑️ Clear All News</button>
+            </div>
+            <div id="news-list-admin" class="news-grid">
+                <!-- Admin news list will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Check for admin session? 
+         Ideally we should check if the user is logged in, similar to admin.html. 
+         For now, we assume if they can access the link from admin.html, they are admins.
+         Or we can include admin.js to check session. 
+         But admin.js is heavy and tied to specific DOM elements.
+         We will rely on obscurity/admin-only link for now or add a simple check if we had a shared auth script.
+         Existing admin.html uses session storage "adminLoggedIn". Let's check that.
+    -->
+    <script>
+        // Simple auth check
+        if (!sessionStorage.getItem('adminAuthSession')) {
+            alert("Access Denied: You must be logged in as Admin/User to view this page.");
+            window.location.href = 'admin.html';
+        }
+    </script>
+    <script type="module" src="config.js"></script>
+    <script src="news.js"></script>
+</body>
+</html>
