@@ -5,13 +5,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0c0c14">
     <meta name="color-scheme" content="dark light">
+    <!-- Cache Busting: Always fetch latest version -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>الارصاد المهدوية</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="icon" type="image/jpeg" href="favicon.jpg">
     <link rel="manifest" href="manifest.json">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=20260110-1254">
     <style>
         :root {
             --bg-color: #0c0c14;
@@ -97,13 +101,15 @@
     <div class="container">
         <header class="header-panel">
             <a href="index.html"><img src="img/Mahdawi_Weather.png" alt="Mahdawi Weather Logo" width="280"></a>
-            <p class="subtitle">Predict the weather, this month.</p>
-            <div style="margin-top: 15px;">
-                <a href="news.html" style="background: rgba(59, 130, 246, 0.1); color: var(--primary-color); padding: 8px 20px; border-radius: 12px; text-decoration: none; font-size: 0.9rem; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.3); transition: all 0.2s; display: inline-flex; align-items: center; gap: 8px;">
-                    <span>📰</span> Latest News
-                </a>
+            <p class="subtitle">Predict the weather, this month.</p> 
+            <div style="margin-top: 15px; display: flex; justify-content: center;">
+                <button onclick="window.location.href = 'news.html';" id="btn-link-news" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(37, 99, 235, 0.2) 100%); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(59, 130, 246, 0.3); color: white; padding: 10px 24px; border-radius: 50px; font-weight: 700; font-size: 0.95rem; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);" onmouseover="this.style.transform='scale(1.05) translateY(-2px)'; this.style.boxShadow='0 8px 25px rgba(59, 130, 246, 0.4)'; this.style.borderColor='rgba(59, 130, 246, 0.5)';" onmouseout="this.style.transform='scale(1) translateY(0)'; this.style.boxShadow='0 4px 15px rgba(0, 0, 0, 0.3)'; this.style.borderColor='rgba(59, 130, 246, 0.3)';">
+                    <span style="font-size: 1.2rem;">📰</span> NEWS
+                </button>
             </div>
         </header>
+
+        
 
         <section class="section-panel date-display">
             <p>Target Date:</p>
@@ -211,10 +217,10 @@
         </div>
     </div>
 
-    <script type="module" src="config.js" defer></script>
-    <script src="analytics.js" defer></script>
-    <script src="script.js" defer></script>
-    <script src="chatbot.js" defer></script>
+    <script type="module" src="config.js?v=20260110-1254" defer></script>
+    <script src="analytics.js?v=20260110-1254" defer></script>
+    <script src="script.js?v=20260110-1254" defer></script>
+    <script src="chatbot.js?v=20260110-1254" defer></script>
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
