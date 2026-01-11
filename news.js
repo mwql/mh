@@ -1,8 +1,8 @@
 /**
  * Shared News Logic (Supabase Integrated)
  * Handles fetching, displaying, and managing news items.
- * Uses Supabase 'news' table for persistence.
  */
+console.log("[DEBUG] news.js LOADED - Version: 2026-01-11_15-10-FINAL");
 
 // Global config access
 function getSupabaseCredentials() {
@@ -30,18 +30,78 @@ function getSupabaseCredentials() {
 // Global State
 let currentNewsList = [];
 let editingNewsId = null;
+let currentUserRole = null; // To track if logged in as admin or user
+
+// --- Authentication Logic ---
+
+async function checkPassword() {
+    const passwordInput = document.getElementById("admin-password");
+    const loginSection = document.getElementById("login-section");
+    const adminPanel = document.getElementById("admin-panel");
+    const errorMsg = document.getElementById("error-msg");
+
+    const inputPassword = passwordInput.value;
+
+    if (!inputPassword) {
+        if (errorMsg) {
+            errorMsg.style.display = "block";
+            errorMsg.textContent = "Please enter a password";
+        }
+        return;
+    }
+
+    // Hash the input password using the global function from config.js
+    if (!window.hashPassword) {
+        console.error("News: hashPassword function not found. Ensure config.js is loaded.");
+        return;
+    }
+
+    const hashedInput = await window.hashPassword(inputPassword);
+
+    if (hashedInput === window.ADMIN_PASSWORD_HASH) {
+        currentUserRole = "admin";
+        if (loginSection) loginSection.style.display = "none";
+        if (adminPanel) adminPanel.style.display = "block";
+        
+        sessionStorage.setItem("adminAuthSession", JSON.stringify({
+            role: "admin",
+            timestamp: Date.now()
+        }));
+        removePinFieldForLoggedInUsers();
+        renderNewsAdmin();
+    } else if (hashedInput === window.USER_PASSWORD_HASH) {
+        currentUserRole = "user";
+        if (loginSection) loginSection.style.display = "none";
+        if (adminPanel) adminPanel.style.display = "block";
+        
+        sessionStorage.setItem("adminAuthSession", JSON.stringify({
+            role: "user",
+            timestamp: Date.now()
+        }));
+        removePinFieldForLoggedInUsers();
+        renderNewsAdmin();
+    } else {
+        if (errorMsg) {
+            errorMsg.style.display = "block";
+            errorMsg.textContent = "Incorrect password. Try again.";
+        }
+        passwordInput.value = "";
+    }
+}
+
+// Make globally available
+window.checkPassword = checkPassword;
+
 
 // --- Data Fetching ---
 
 async function getNews() {
     const { url, key } = getSupabaseCredentials();
     
-    // Fallback to local storage
+    // Strictly use Supabase
     if (!url || !key) {
-        console.warn("News: Supabase not configured. Using local storage.");
-        const stored = localStorage.getItem('mh_news_data');
-        currentNewsList = stored ? JSON.parse(stored) : [];
-        return currentNewsList;
+        console.error("News: Supabase not configured.");
+        return [];
     }
 
     try {
@@ -73,9 +133,7 @@ async function getNews() {
         }
     } catch (e) {
         console.error("News: Network error", e);
-        const stored = localStorage.getItem('mh_news_data');
-        currentNewsList = stored ? JSON.parse(stored) : [];
-        return currentNewsList;
+        return [];
     }
 }
 
@@ -83,15 +141,8 @@ async function saveNews(newsItem, isUpdate = false, id = null) {
     const { url, key } = getSupabaseCredentials();
 
     if (!url || !key) {
-        let current = JSON.parse(localStorage.getItem('mh_news_data') || '[]');
-        if (isUpdate && id) {
-            const index = current.findIndex(i => i.id === id);
-            if (index !== -1) current[index] = { ...current[index], ...newsItem, id: id };
-        } else {
-            current.push({ ...newsItem, id: Date.now() });
-        }
-        localStorage.setItem('mh_news_data', JSON.stringify(current));
-        return true;
+        alert("Error: Supabase not configured.");
+        return false;
     }
 
     try {
@@ -178,21 +229,96 @@ async function verifyPinForAction(publisherRole, action) {
 }
 
 async function deleteNews(id, publisherRole) {
-    if (!await verifyPinForAction(publisherRole, 'delete')) return;
-    if (!confirm('Are you definitely sure?')) return;
+    console.log(`[DEBUG] deleteNews START. ID: ${id}, PublisherRole: ${publisherRole}, currentUserRole: ${currentUserRole}`);
+    
+    if (currentUserRole !== 'admin') {
+        console.warn("[DEBUG] Non-admin tried to delete.");
+        alert('⚠️ Only administrators can delete news articles.');
+        return;
+    }
 
+    // Create custom confirmation dialog since confirm() is broken
+    const confirmed = await new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:10000;display:flex;align-items:center;justify-content:center;';
+        
+        const dialog = document.createElement('div');
+        dialog.style.cssText = 'background:#1a1a2e;padding:30px;border-radius:12px;max-width:400px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.5);';
+        dialog.innerHTML = `
+            <h3 style="color:#fff;margin:0 0 15px 0;font-size:1.3rem;">⚠️ Confirm Deletion</h3>
+            <p style="color:#ccc;margin:0 0 25px 0;line-height:1.5;">Are you sure you want to delete this news article? This action cannot be undone.</p>
+            <div style="display:flex;gap:10px;justify-content:center;">
+                <button id="confirm-cancel" style="padding:10px 20px;background:#555;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;">Cancel</button>
+                <button id="confirm-ok" style="padding:10px 20px;background:#ef4444;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:1rem;">Delete</button>
+            </div>
+        `;
+        
+        overlay.appendChild(dialog);
+        document.body.appendChild(overlay);
+        
+        document.getElementById('confirm-ok').onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(true);
+        };
+        document.getElementById('confirm-cancel').onclick = () => {
+            document.body.removeChild(overlay);
+            resolve(false);
+        };
+    });
+    
+    console.log(`[DEBUG] Custom confirm result: ${confirmed}`);
+    
+    if (!confirmed) {
+        console.log("[DEBUG] Deletion cancelled by user.");
+        return;
+    }
+    
+    console.log("[DEBUG] Admin deletion - proceeding after confirmation...");
     const { url, key } = getSupabaseCredentials();
+    console.log(`[DEBUG] Supabase credentials: URL=${url ? 'Present' : 'Missing'}, Key=${key ? 'Present' : 'Missing'}`);
     
     if (!url || !key) {
-         let current = JSON.parse(localStorage.getItem('mh_news_data') || '[]');
-         current = current.filter(item => item.id.toString() !== id.toString());
-         localStorage.setItem('mh_news_data', JSON.stringify(current));
-         renderNewsAdmin(); 
+         console.error("[DEBUG] Supabase credentials missing during delete.");
+         alert("Error: Supabase not configured.");
          return;
     }
 
+    console.log("[DEBUG] Starting deletion process...");
+
     try {
+        // 1. Get the item data to find media paths for storage deletion
+        const item = currentNewsList.find(n => n.id.toString() === id.toString());
+        console.log(`[DEBUG] Item to delete:`, item);
+        
+        // 2. Delete media from Supabase Storage if they exist
+        if (item) {
+            const mediaToDelete = [];
+            if (item.image_url && item.image_url.includes('/news-images/')) mediaToDelete.push(item.image_url);
+            if (item.video_url && item.video_url.includes('/news-images/')) mediaToDelete.push(item.video_url);
+
+            for (const mediaUrl of mediaToDelete) {
+                try {
+                    const filePath = mediaUrl.split('/news-images/').pop();
+                    const storageDeleteUrl = `${url.replace(/\/$/, '')}/storage/v1/object/news-images/${filePath}`;
+                    console.log(`[DEBUG] Deleting media from storage: ${storageDeleteUrl}`);
+                    
+                    await fetch(storageDeleteUrl, {
+                        method: 'DELETE',
+                        headers: {
+                            'apikey': key,
+                            'Authorization': `Bearer ${key}`
+                        }
+                    });
+                } catch (err) {
+                    console.error("[DEBUG] Error deleting media from storage:", err);
+                }
+            }
+        }
+
+        // 3. Delete the news record from the table
         const requestUrl = `${url.replace(/\/$/, '')}/rest/v1/news?id=eq.${id}`;
+        console.log(`[DEBUG] Deleting record: ${requestUrl}`);
+        
         const response = await fetch(requestUrl, {
             method: 'DELETE',
             headers: {
@@ -202,18 +328,30 @@ async function deleteNews(id, publisherRole) {
         });
 
         if (response.ok) {
+            console.log("[DEBUG] News record deleted successfully.");
             renderNewsAdmin(); 
         } else {
-            alert("Error deleting: " + await response.text());
+            const errText = await response.text();
+            console.error("[DEBUG] Supabase delete error:", errText);
+            alert("Error deleting news record: " + errText);
         }
     } catch (e) {
-        console.error(e);
+        console.error("[DEBUG] Network Error during delete:", e);
         alert("Network Error");
     }
 }
 
 async function editNews(id, publisherRole) {
-    if (!await verifyPinForAction(publisherRole, 'edit')) return;
+    // PERMISSION CHECK: Only admins can edit news
+    if (currentUserRole !== 'admin') {
+        alert('⚠️ Only administrators can edit news articles.');
+        return;
+    }
+
+    // Admin can edit without PIN
+    if (currentUserRole !== 'admin') {
+        if (!await verifyPinForAction(publisherRole, 'edit')) return;
+    }
 
     const item = currentNewsList.find(n => n.id.toString() === id.toString());
     if (!item) {
@@ -281,14 +419,21 @@ function createNewsCardHtml(item, isAdmin = false) {
         `;
     }
 
-    // Admin Actions
+    // Admin Actions - Only show edit/delete for admins
     let adminActionsHtml = '';
-    if (isAdmin) {
+    if (isAdmin && currentUserRole === 'admin') {
         const role = item.publisher_role || 'admin';
         adminActionsHtml = `
             <div style="display:flex; gap:10px; margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px;">
                 <button class="btn-edit" style="flex:1;" onclick="editNews('${item.id}', '${role}')">✏️ Edit</button>
                 <button class="btn-danger" style="flex:1;" onclick="deleteNews('${item.id}', '${role}')">🗑️ Delete</button>
+            </div>
+        `;
+    } else if (isAdmin && currentUserRole === 'user') {
+        // Show a message that users can't edit/delete
+        adminActionsHtml = `
+            <div style="margin-top:15px; border-top:1px solid rgba(255,255,255,0.1); padding-top:10px; text-align:center;">
+                <p style="color: var(--text-muted); font-size: 0.85rem;">👁️ View only (Admin access required to edit/delete)</p>
             </div>
         `;
     }
@@ -460,7 +605,7 @@ async function handleAddNews(e) {
     const pinObj = document.getElementById('publish-pin');
     const btn = document.getElementById('btn-add-news');
 
-    if (!titleObj || !contentObj || !pinObj) return;
+    if (!titleObj || !contentObj) return;
 
     const title = titleObj.value.trim();
     const content = contentObj.value.trim();
@@ -469,47 +614,46 @@ async function handleAddNews(e) {
     // Auto-fix link
     if (link_url && !/^https?:\/\//i.test(link_url)) link_url = 'https://' + link_url;
 
-    const pin = pinObj.value.trim();
-
     if (!title || !content) {
         alert('Please fill in title and content.');
         return;
     }
     
-    // If Editing, we need PIN for the CURRENT user who is editing, 
-    // OR do we re-verify? We already verified to click "Edit".
-    // But we need to define the Role of the UPDATED item.
-    // If Admin edits simple User post, does it become Admin post? Or stay User?
-    // Let's rely on the PIN entered NOW to determine validity.
-    // Wait, editing verification happened at button click.
-    // But saving requires re-verification of "Who are you?" to determine Role/Author.
-    // Let's allow the PIN entered to dictate the NEW Author/Role.
-    
-    if (!pin) {
-        alert('Please enter a Publish PIN.');
-        return;
-    }
-
-    // AUTH CHECK
+    // AUTH CHECK - Use session role if available, otherwise ask for PIN
     let role = '';
     let authorName = '';
 
-    const hashedPin = await window.hashPassword(pin);
-
-    if (hashedPin === window.ADMIN_PASSWORD_HASH) {
-        role = 'admin';
-        authorName = 'Admin';
-    } else if (hashedPin === window.USER_PASSWORD_HASH) {
-        role = 'user';
-        authorName = 'User';
+    if (currentUserRole) {
+        // User is logged in - use their session role
+        role = currentUserRole;
+        authorName = currentUserRole === 'admin' ? 'Admin' : 'User';
+        
+        // Remove PIN field since it's not needed
+        removePinFieldForLoggedInUsers();
     } else {
-        alert("Incorrect PIN. Please try again.");
-        return;
+        // User is not logged in - require PIN
+        const pin = pinObj ? pinObj.value.trim() : '';
+        
+        if (!pin) {
+            alert('Please enter a Publish PIN.');
+            return;
+        }
+
+        const hashedPin = await window.hashPassword(pin);
+
+        if (hashedPin === window.ADMIN_PASSWORD_HASH) {
+            role = 'admin';
+            authorName = 'Admin';
+        } else if (hashedPin === window.USER_PASSWORD_HASH) {
+            role = 'user';
+            authorName = 'User';
+        } else {
+            alert("Incorrect PIN. Please try again.");
+            return;
+        }
     }
 
-    // LIMIT CHECK FOR USER (Skip if updating existing item? Or strictly enforce?)
-    // If updating, count doesn't change (+0).
-    // If inserting, count +1.
+    // LIMIT CHECK FOR USER (Skip if updating existing item)
     if (role === 'user' && !editingNewsId) {
         try {
             const userPosts = currentNewsList.filter(n => n.publisher_role === 'user').length;
@@ -585,17 +729,19 @@ async function handleAddNews(e) {
         titleObj.value = '';
         contentObj.value = '';
         if(imageInput) imageInput.value = ''; 
-        if(videoInput) videoInput.value = '';
+        if(videoInput) videoInput.value = ''
+;
         if(linkObj) linkObj.value = '';
-        pinObj.value = '';
+        if(pinObj) pinObj.value = '';
+        
+        await renderNewsAdmin();
+        alert(editingNewsId ? 'News updated!' : 'News published!');
         
         // Reset Edit Mode
         editingNewsId = null;
         btn.textContent = "Publish News";
         btn.classList.remove('btn-warning');
-        
-        await renderNewsAdmin();
-        alert(editingNewsId ? 'News updated!' : 'News published!');
+        btn.disabled = false; // Re-enable the button
     } else {
         btn.textContent = originalText;
         btn.disabled = false;
@@ -623,6 +769,12 @@ function formatContent(text) {
 // --- Clear All Logic ---
 
 async function handleClearAllNews() {
+    // PERMISSION CHECK: Only admins can clear all news
+    if (currentUserRole !== 'admin') {
+        alert('⚠️ Only administrators can clear all news articles at once.');
+        return;
+    }
+
     if (!confirm("⚠️ WARNING: This will delete ALL news items. This action cannot be undone.\n\nAre you sure?")) return;
 
     const pin = prompt("Please enter the ADMIN PIN to confirm deletion:");
@@ -671,6 +823,20 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (document.getElementById('news-list-admin')) {
+        // Recover session if exists (Disabled: forced login on refresh)
+        /*
+        const session = sessionStorage.getItem('adminAuthSession');
+        if (session) {
+            try {
+                const authData = JSON.parse(session);
+                currentUserRole = authData.role;
+                
+                // Hide PIN field for logged-in users
+                hidePinFieldForLoggedInUsers();
+            } catch(e) {}
+        }
+        */
+
         renderNewsAdmin();
         const addBtn = document.getElementById('btn-add-news');
         if (addBtn) {
@@ -683,5 +849,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 });
+
+// Helper function to remove PIN field for logged-in users
+function removePinFieldForLoggedInUsers() {
+    const pinObj = document.getElementById('publish-pin');
+    if (pinObj && pinObj.parentElement && currentUserRole) {
+        // Find the parent form-group div and remove it
+        const formGroup = pinObj.closest('.form-group');
+        if (formGroup) {
+            formGroup.remove();
+        } else {
+            pinObj.remove();
+        }
+    }
+}
 
 window.deleteNews = deleteNews;

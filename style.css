@@ -235,10 +235,18 @@ header img {
 
 .prediction-card.highlighted {
   border-color: var(--accent-color);
-  background: rgba(6, 182, 212, 0.1);
-  box-shadow: 0 0 20px rgba(6, 182, 212, 0.3);
-  transform: scale(1.02);
+  border-width: 2px;
+  background: rgba(6, 182, 212, 0.15);
+  box-shadow: 0 0 25px rgba(6, 182, 212, 0.4);
+  transform: scale(1.03);
   z-index: 10;
+  animation: pulse-highlight 2s infinite;
+}
+
+@keyframes pulse-highlight {
+  0% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.3); }
+  50% { box-shadow: 0 0 30px rgba(6, 182, 212, 0.6); }
+  100% { box-shadow: 0 0 15px rgba(6, 182, 212, 0.3); }
 }
 
 .weather-icon {

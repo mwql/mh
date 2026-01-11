@@ -65,6 +65,19 @@ function deduplicatePredictions(predictions) {
     });
 }
 
+// Normalize date format (handles "2026-1-1" -> "2026-01-01")
+function normalizeDate(dateStr) {
+    if (!dateStr) return '';
+    const parts = dateStr.split('-');
+    if (parts.length === 3) {
+        const year = parts[0];
+        const month = String(parts[1]).padStart(2, '0');
+        const day = String(parts[2]).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    }
+    return dateStr;
+}
+
 // Fetch predictions from Supabase (fallback to localStorage)
 async function loadPredictions() {
     let rawData = [];
@@ -318,17 +331,7 @@ async function displayPredictions(predictions) {
         }
     }
     
-    // Normalize date format (handles "2026-1-1" -> "2026-01-01")
-    function normalizeDate(dateStr) {
-        const parts = dateStr.split('-');
-        if (parts.length === 3) {
-            const year = parts[0];
-            const month = parts[1].padStart(2, '0');
-            const day = parts[2].padStart(2, '0');
-            return `${year}-${month}-${day}`;
-        }
-        return dateStr;
-    }
+
     
     // Update main header on index.html
     // Logic: Look for __TARGET_DATE__ config. If exists and valid, use it. Else use LIVE TODAY.
@@ -698,8 +701,11 @@ function renderCalendarView(predictions) {
                 const targetCard = document.querySelector(`.prediction-card[data-date="${targetDate}"]`);
                 
                 if (targetCard) {
-                    targetCard.classList.add('highlighted');
-                    targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Small delay to ensure view switch layout is stable
+                    setTimeout(() => {
+                        targetCard.classList.add('highlighted');
+                        targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }, 50);
                 }
             };
         }
@@ -992,10 +998,13 @@ async function postVoiceAsset(name, base64) {
 // =============================
 
 // Global click listener to clear highlights
-document.addEventListener('click', () => {
-    document.querySelectorAll('.prediction-card.highlighted').forEach(card => {
-        card.classList.remove('highlighted');
-    });
+document.addEventListener('click', (e) => {
+    // Only clear if the click was NOT on a prediction card or its children
+    if (!e.target.closest('.prediction-card')) {
+        document.querySelectorAll('.prediction-card.highlighted').forEach(card => {
+            card.classList.remove('highlighted');
+        });
+    }
 });
 
 // Start as early as possible

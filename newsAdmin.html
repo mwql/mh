@@ -14,20 +14,188 @@
     <link rel="icon" type="image/jpeg" href="favicon.jpg">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="news.css"> 
-    <!-- Using shared news.css -->
+    <link rel="stylesheet" href="news.css">
+    <style>
+        /* CSS Variables - matching admin.html */
+        :root {
+            --bg-color: #0c0c14;
+            --card-bg: rgba(255, 255, 255, 0.05);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text-color: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary-color: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent-color: #06b6d4;
+            --glass-bg: rgba(15, 23, 42, 0.7);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background-color: var(--bg-color);
+            background: linear-gradient(rgba(12, 12, 20, 0.85), rgba(12, 12, 20, 0.95)),
+                        url('https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Flag_of_Iran.svg/2560px-Flag_of_Iran.svg.png');
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            background-repeat: no-repeat;
+            color: var(--text-color);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Login Styles */
+        #login-section {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 80vh;
+        }
+
+        .login-box {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 48px 40px;
+            box-shadow: var(--shadow);
+            text-align: center;
+            max-width: 400px;
+            width: 100%;
+        }
+
+        .login-box h1 {
+            color: #ffffff;
+            margin-bottom: 12px;
+            font-size: 2.2rem;
+            font-weight: 700;
+        }
+
+        .login-box p {
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            font-size: 0.95rem;
+        }
+
+        .input-group {
+            margin-bottom: 24px;
+        }
+
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 14px 18px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            color: var(--text-color);
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            background: rgba(0, 0, 0, 0.4);
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        button, .btn-primary {
+            padding: 14px 28px;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-family: 'Outfit', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }
+
+        button:hover, .btn-primary:hover {
+            background: var(--primary-hover);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        }
+
+        #error-msg {
+            display: none;
+            color: #ef4444;
+            margin-top: 16px;
+            font-size: 0.9rem;
+            font-weight: 500;
+        }
+
+        #admin-panel {
+            display: none;
+        }
+    </style>
+    <script>
+        // Inline password hashing to avoid CORS issues with config.js
+        async function hashPassword(password) {
+            const encoder = new TextEncoder();
+            const data = encoder.encode(password);
+            const hashBuffer = await crypto.subtle.digest("SHA-256", data);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+        }
+
+        const ADMIN_PASSWORD_HASH = "d4735e3a265e16eee03f59718b9b5d03019c07d8b6c51f90da3a666eec13ab35"; // '2'
+        const USER_PASSWORD_HASH = "4fc82b26aecb47d2868c4efbe3581732a3e7cbcc6c2efb32062c08170a05eeb8"; // '11'
+        
+        const SUPABASE_PUBLIC_CONFIG = {
+            URL: "https://jfmvebvwovibxuxskrcd.supabase.co",
+            ANON_KEY: "sb_publishable_YSsIGJW7AQuh37VqbwmDWg_fmRZVXVh",
+        };
+
+        // Make available globally
+        window.hashPassword = hashPassword;
+        window.ADMIN_PASSWORD_HASH = ADMIN_PASSWORD_HASH;
+        window.USER_PASSWORD_HASH = USER_PASSWORD_HASH;
+        window.SUPABASE_PUBLIC_CONFIG = SUPABASE_PUBLIC_CONFIG;
+    </script>
 </head>
 <body>
     <div class="container">
-        <!-- Header -->
-        <div class="header">
-            <h1>📰 News Administration</h1>
-            <p>Create and manage news articles.</p>
-            <div style="margin-top: 15px;">
-                <a href="admin.html" style="color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">&larr; Back to Dashboard</a>
-                <a href="news.html" style="margin-left: 20px; color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">Go to News &rarr;</a>
+        <!-- Login Section -->
+        <div id="login-section">
+            <div class="login-box">
+                <h1>🔐 News Admin</h1>
+                <p>Enter password to access news management</p>
+                <div class="input-group">
+                    <input type="password" id="admin-password" placeholder="Password" onkeypress="if(event.key === 'Enter') checkPassword()">
+                </div>
+                <button onclick="checkPassword()" class="btn-primary" style="width: 100%;">Login</button>
+                <p id="error-msg">Incorrect password. Try again.</p>
+                <div style="margin-top: 24px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <a href="index.html" style="color: var(--text-muted); text-decoration: none; font-size: 0.85rem;">&larr; Back to Website</a>
+                    <a href="admin.html" style="margin-left: 20px; color: var(--text-muted); text-decoration: none; font-size: 0.85rem;">Go to Weather Admin &rarr;</a>
+                </div>
             </div>
         </div>
+
+        <!-- Admin Panel (Wrapped Existing Content) -->
+        <div id="admin-panel">
+            <!-- Header -->
+            <div class="header">
+                <h1>📰 News Administration</h1>
+                <p>Create and manage news articles.</p>
+                <div style="margin-top: 15px;">
+                    <a href="admin.html" style="color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">&larr; Back to Dashboard</a>
+                    <a href="news.html" style="margin-left: 20px; color: var(--primary-color); text-decoration: none; font-size: 0.9rem; font-weight: 600;">Go to News &rarr;</a>
+                </div>
+            </div>
 
         <!-- Add News Section -->
         <div class="section">
@@ -63,7 +231,6 @@
         </div>
 
         <!-- Existing News Section -->
-        <!-- Existing News Section -->
         <div class="section">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h2>📋 Existing News</h2>
@@ -73,24 +240,28 @@
                 <!-- Admin news list will be loaded here -->
             </div>
         </div>
+        </div> <!-- End #admin-panel -->
     </div>
 
-    <!-- Check for admin session? 
-         Ideally we should check if the user is logged in, similar to admin.html. 
-         For now, we assume if they can access the link from admin.html, they are admins.
-         Or we can include admin.js to check session. 
-         But admin.js is heavy and tied to specific DOM elements.
-         We will rely on obscurity/admin-only link for now or add a simple check if we had a shared auth script.
-         Existing admin.html uses session storage "adminLoggedIn". Let's check that.
-    -->
     <script>
-        // Simple auth check
-        if (!sessionStorage.getItem('adminAuthSession')) {
-            alert("Access Denied: You must be logged in as Admin/User to view this page.");
-            window.location.href = 'admin.html';
-        }
+        // Check for session immediately
+        document.addEventListener('DOMContentLoaded', () => {
+            // Note: Login is now required on every refresh as per user request.
+            // Automatic session recovery is disabled.
+            /*
+            const session = sessionStorage.getItem('adminAuthSession');
+            if (session) {
+                try {
+                    const authData = JSON.parse(session);
+                    if (authData.role === 'admin' || authData.role === 'user') {
+                        document.getElementById('login-section').style.display = 'none';
+                        document.getElementById('admin-panel').style.display = 'block';
+                    }
+                } catch (e) {}
+            }
+            */
+        });
     </script>
-    <script type="module" src="config.js"></script>
-    <script src="news.js"></script>
+    <script src="news.js?v=20260111-1510"></script>
 </body>
 </html>
